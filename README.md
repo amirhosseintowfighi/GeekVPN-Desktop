@@ -5,6 +5,15 @@
 - معماری و تصمیم‌ها: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - بردهای طراحی دسکتاپ: [`design/desktop/`](design/desktop/) (تولیدشده با `gen.py`)
 
+## هسته‌ی اتصال
+
+قبل از اولین `pnpm dev` یا `pnpm build`:
+
+```bash
+scripts/build-geekcore.sh   # Go 1.27 به بعد (GOTOOLCHAIN=auto خودش می‌گیرد)
+scripts/fetch-geo.sh        # geoip.dat و geosite.dat
+```
+
 ## اجرا
 
 پیش‌نیازها: Node 22 و pnpm 10، Rust stable، و روی لینوکس

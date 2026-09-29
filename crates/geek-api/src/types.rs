@@ -112,3 +112,25 @@ pub(crate) struct Problem {
     #[serde(default)]
     pub message_fa: Option<String>,
 }
+
+/// One service, as `/api/miniapp/subscriptions` lists it (camelCased by the
+/// Mini App router). Only what the desktop app uses.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionCard {
+    pub subscription_id: String,
+    pub product_name_fa: String,
+    pub plan_name_fa: String,
+    /// active | expired | exhausted | suspended | revoked
+    pub state: String,
+    pub expires_at: Option<DateTime<Utc>>,
+    /// None: unlimited.
+    pub quota_gib: Option<f64>,
+    #[serde(default)]
+    pub used_gib: f64,
+    pub subscription_url: Option<String>,
+    #[serde(default)]
+    pub remote_username: String,
+    /// direct | tunnel | elite; None for a service adopted from a link.
+    pub tier: Option<String>,
+}

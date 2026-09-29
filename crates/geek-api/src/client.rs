@@ -7,7 +7,8 @@ use url::Url;
 
 use crate::error::ApiError;
 use crate::types::{
-    AppUser, DeviceInfo, LinkPoll, LinkStart, PasswordRequest, PollRequest, Problem, RefreshRequest, SignedIn, Tokens,
+    AppUser, DeviceInfo, LinkPoll, LinkStart, PasswordRequest, PollRequest, Problem, RefreshRequest, SignedIn,
+    SubscriptionCard, Tokens,
 };
 
 /// The server holds a waiting poll for up to 25 seconds
@@ -87,6 +88,20 @@ impl ApiClient {
     pub async fn me(&self, access_token: &str) -> Result<AppUser, ApiError> {
         let req = self.request(Method::GET, "api/v1/auth/me")?.bearer_auth(access_token);
         send(req, Auth::Session).await
+    }
+
+    pub async fn subscriptions(&self, access_token: &str) -> Result<Vec<SubscriptionCard>, ApiError> {
+        self.get_json("api/miniapp/subscriptions", access_token).await
+    }
+
+    /// A subscription's body: the panel's share links, usually base64. It is
+    /// public by URL (the token is in it), so no Bearer goes along.
+    pub async fn fetch_subscription(&self, url: &str) -> Result<String, ApiError> {
+        let resp = self.http.get(url).timeout(REQUEST_TIMEOUT).send().await?;
+        if !resp.status().is_success() {
+            return Err(ApiError::Http { status: resp.status().as_u16(), title: "subscription".into(), message_fa: None });
+        }
+        resp.text().await.map_err(|e| ApiError::Decode(e.to_string()))
     }
 
     /// Any Mini App route (`/api/miniapp/...`) over the app's Bearer token.

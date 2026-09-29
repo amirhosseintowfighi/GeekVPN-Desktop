@@ -46,3 +46,23 @@ describe("theme", () => {
     expect(loadTheme()).toBe("system");
   });
 });
+
+import { countryCode, daysLeft, elapsed, plainName, speed } from "./format";
+
+describe("format", () => {
+  it("writes speeds the way the design does", () => {
+    expect(speed(2.48 * 1024 * 1024)).toEqual({ value: "2.48", unit: "MB/s" });
+    expect(speed(312 * 1024)).toEqual({ value: "312", unit: "KB/s" });
+    expect(speed(0)).toEqual({ value: "0", unit: "B/s" });
+  });
+  it("counts connection time and days left", () => {
+    expect(elapsed(0, (12 * 60 + 48) * 1000)).toBe("00:12:48");
+    expect(daysLeft("2026-10-27T00:00:00Z", Date.parse("2026-09-29T00:00:00Z"))).toBe(28);
+    expect(daysLeft(null, 0)).toBeNull();
+  });
+  it("reads the country from a flag emoji", () => {
+    expect(countryCode("🇩🇪 Germany")).toBe("DE");
+    expect(plainName("🇩🇪 Germany")).toBe("Germany");
+    expect(countryCode("tunnel-1")).toBe("TU");
+  });
+});

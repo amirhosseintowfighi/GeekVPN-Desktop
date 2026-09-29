@@ -2,6 +2,9 @@ import { createHashRouter, RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { Account } from "./pages/Account";
 import { Login } from "./pages/Login";
+import { ServersPage } from "./pages/ServerList";
+import { Services } from "./pages/Services";
+import { TunnelProvider } from "./lib/TunnelContext";
 import { AppShell } from "./shell/AppShell";
 import { Home } from "./pages/Home";
 import { Section } from "./pages/Section";
@@ -16,21 +19,8 @@ const router = createHashRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <Home /> },
-      {
-        path: "servers",
-        element: (
-          <Section
-            title="سرورها"
-            icon="globe"
-            emptyTitle="هنوز سروری نداری"
-            emptyText="سرورهای سرویس‌هایت و لینک‌های دستی اینجا فهرست می‌شوند، با تست تأخیر و ستاره."
-          />
-        ),
-      },
-      {
-        path: "services",
-        element: <Section title="سرویس‌های من" icon="shield" emptyTitle="سرویسی نداری" emptyText={GUEST} />,
-      },
+      { path: "servers", element: <ServersPage /> },
+      { path: "services", element: <Services /> },
       { path: "shop", element: <Section title="فروشگاه" icon="bag" emptyTitle="فروشگاه" emptyText={GUEST} /> },
       {
         path: "connections",
@@ -66,7 +56,11 @@ function Gate() {
   const { view, isGuest } = useAuth();
   if (view === null) return <div className="h-full w-full bg-bg" />;
   if (!view.user && !isGuest) return <Login />;
-  return <RouterProvider router={router} />;
+  return (
+    <TunnelProvider>
+      <RouterProvider router={router} />
+    </TunnelProvider>
+  );
 }
 
 export function App() {

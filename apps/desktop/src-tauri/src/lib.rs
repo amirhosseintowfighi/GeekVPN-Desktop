@@ -1,4 +1,7 @@
 mod auth;
+mod servers;
+mod store;
+mod tunnel;
 
 use std::sync::Arc;
 
@@ -22,6 +25,44 @@ impl TokenStore for NoStore {
         Ok(())
     }
 }
+
+/// geekcore sits next to the app's executable: Tauri's `externalBin` puts
+/// it there in every bundle, and `tauri dev` copies it there too.
+fn core_binary() -> std::io::Result<std::path::PathBuf> {
+    let exe = std::env::current_exe()?;
+    let dir = exe.parent().ok_or_else(|| std::io::Error::other("no exe dir"))?;
+    Ok(dir.join(if cfg!(windows) { "geekcore.exe" } else { "geekcore" }))
+}
+
+fn geo_dir(app: &tauri::App) -> tauri::Result<std::path::PathBuf> {
+    Ok(app.path().resource_dir()?.join("resources").join("geo"))
+}
+
+/// A logout, shutdown or `kill` ends the process without Tauri's Exit event;
+/// the system proxy still has to go back before we are gone.
+#[cfg(unix)]
+fn restore_on_signals(app: tauri::AppHandle, tunnel: Arc<tunnel::Tunnel>) {
+    use tokio::signal::unix::{signal, SignalKind};
+    tauri::async_runtime::spawn(async move {
+        let (Ok(mut term), Ok(mut int), Ok(mut hup)) =
+            (signal(SignalKind::terminate()), signal(SignalKind::interrupt()), signal(SignalKind::hangup()))
+        else {
+            return;
+        };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = int.recv() => {}
+            _ = hup.recv() => {}
+        }
+        tunnel.shutdown().await;
+        app.exit(0);
+    });
+}
+
+/// Windows ends sessions through window messages, which Tauri turns into the
+/// Exit event handled in `run`; a hard kill is covered by `Tunnel::recover`.
+#[cfg(not(unix))]
+fn restore_on_signals(_app: tauri::AppHandle, _tunnel: Arc<tunnel::Tunnel>) {}
 
 /// Builds and runs the app. Everything the UI may call is declared in
 /// `capabilities/` and the `invoke_handler` below; the webview gets nothing else.
@@ -55,6 +96,17 @@ pub fn run() {
             let session = Arc::new(Session::restore(api, store));
             tauri::async_runtime::spawn(auth::revalidate(app.handle().clone(), session.clone()));
             app.manage(auth::AuthState::new(session, device));
+
+            let data = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data)?;
+            let tunnel = Arc::new(tunnel::Tunnel::new(core_binary()?, geo_dir(app)?, data.join("proxy-snapshot.json")));
+            // A previous run that died connected left the system proxy on.
+            tunnel.recover();
+            app.manage(servers::ServersState {
+                store: tokio::sync::Mutex::new(store::Store::load(data.join("servers.json"))),
+                tunnel: tunnel.clone(),
+            });
+            restore_on_signals(app.handle().clone(), tunnel);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -64,7 +116,24 @@ pub fn run() {
             auth::login_cancel,
             auth::login_password,
             auth::logout,
+            servers::servers_state,
+            servers::servers_refresh,
+            servers::servers_add,
+            servers::servers_remove_source,
+            servers::servers_set,
+            servers::servers_test,
+            servers::tunnel_state,
+            servers::tunnel_connect,
+            servers::tunnel_disconnect,
         ])
-        .run(tauri::generate_context!())
-        .expect("GeekVPN failed to start");
+        .build(tauri::generate_context!())
+        .expect("GeekVPN failed to start")
+        .run(|app, event| {
+            // Whatever the way out, the system proxy goes back to the user's.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(s) = app.try_state::<servers::ServersState>() {
+                    tauri::async_runtime::block_on(s.tunnel.shutdown());
+                }
+            }
+        });
 }

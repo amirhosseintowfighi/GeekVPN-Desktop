@@ -1,32 +1,108 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Icon, type IconName } from "../design-system/Icon";
 import { Logo } from "../design-system/Logo";
-import { Card, CardTitle } from "../design-system/layout";
+import { CountryBadge, PingBars } from "../design-system/controls";
 import { useAuth } from "../lib/AuthContext";
+import { faDigits } from "../lib/fa";
+import { countryCode, daysLeft, elapsed, plainName, speed } from "../lib/format";
+import { HISTORY, useTunnel } from "../lib/TunnelContext";
+import { ServerPanel } from "./ServerList";
 
-/** One cell of the stats strip under the connect button (Desktop-Home). */
-function Stat({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+function Stat({ icon, label, value, unit }: { icon: IconName; label: string; value: string; unit?: string }) {
   return (
     <div className="flex flex-1 basis-0 flex-col gap-1 px-3.5">
       <span className="flex items-center gap-1.5 text-xs opacity-85">
         <Icon name={icon} size={14} stroke={2.2} />
         {label}
       </span>
-      <span className="text-[17px] font-extrabold">{value}</span>
+      {unit ? (
+        <span dir="ltr" className="text-right font-num text-lg font-bold">
+          {value} <span className="text-[11px] opacity-80">{unit}</span>
+        </span>
+      ) : (
+        <span className="text-[17px] font-extrabold">{value}</span>
+      )}
     </div>
   );
 }
 
-/**
- * Home while there is nothing to connect with: no account and no servers yet.
- * The connecting and connected states arrive with the core (phase 3); nothing
- * here pretends to be connected.
- */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  return now;
+}
+
+/** The last minute of download (white) and upload (light blue), as in Desktop-Home. */
+function SpeedGraph() {
+  const { history } = useTunnel();
+  const max = Math.max(1, ...history.map((h) => Math.max(h.downBps, h.upBps)));
+  const pts = (pick: (h: (typeof history)[number]) => number) =>
+    history.map((h, i) => `${(i + HISTORY - history.length) * (600 / (HISTORY - 1))},${54 - (pick(h) / max) * 50}`).join(" ");
+  return (
+    <div className="flex flex-col gap-1.5 px-1">
+      <div className="flex justify-between text-xs">
+        <span className="font-bold">سرعت زنده · ۶۰ ثانیه‌ی اخیر</span>
+        <span className="flex gap-3 opacity-90">
+          <span className="flex items-center gap-1.5">
+            <span className="h-[3px] w-2.5 rounded-sm bg-white" />
+            دانلود
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-[3px] w-2.5 rounded-sm bg-[#7DD8FF]" />
+            آپلود
+          </span>
+        </span>
+      </div>
+      <svg role="img" aria-label="نمودار سرعت زنده" viewBox="0 0 600 56" preserveAspectRatio="none" className="block h-14 w-full">
+        {history.length > 1 && (
+          <>
+            <polyline points={pts((h) => h.downBps)} fill="none" stroke="#FFFFFF" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            <polyline points={pts((h) => h.upBps)} fill="none" stroke="#7DD8FF" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          </>
+        )}
+      </svg>
+    </div>
+  );
+}
+
+/** Desktop-Home and Desktop-Home-Connecting, driven by the real tunnel state. */
 export function Home() {
-  const [hint, setHint] = useState<string | null>(null);
-  const { view, showSignIn } = useAuth();
-  const user = view?.user ?? null;
+  const { view: auth, showSignIn } = useAuth();
+  const { view, state, stats, busy, toggle } = useTunnel();
+  const on = state.status === "on";
+  const connecting = state.status === "connecting";
+  const now = useNow(on);
+  const user = auth?.user ?? null;
+
+  const serverId = state.status === "on" || state.status === "connecting" ? state.serverId : view?.selected;
+  const server = view?.servers.find((s) => s.id === serverId) ?? null;
+  const account = view?.sources.find((s) => s.kind === "account" && s.id === server?.sourceId) ?? view?.sources.find((s) => s.kind === "account");
+  const quota = account?.kind === "account" ? account : null;
+  const left = quota ? daysLeft(quota.expiresAt, now) : null;
+  const down = speed(stats?.downBps ?? 0);
+  const up = speed(stats?.upBps ?? 0);
+  const noServers = !view?.servers.length;
+
+  let title: string;
+  let subtitle: string;
+  if (on) {
+    title = elapsed(state.sinceMs, now);
+    subtitle = "برای قطع اتصال، روی عینک بزن";
+  } else if (connecting) {
+    title = state.of > 1 ? `تلاش ${faDigits(state.attempt)} از ${faDigits(state.of)}` : "در حال اتصال…";
+    subtitle = "برای لغو، دوباره روی عینک بزن";
+  } else if (noServers) {
+    title = "هنوز سروری نداری";
+    subtitle = "اول یک سرویس بخر یا لینک اشتراکت را در «سرویس‌ها» اضافه کن.";
+  } else {
+    title = view?.autoSelect ? "سرور: خودکار" : plainName(server?.name ?? "") || "آماده‌ی اتصال";
+    subtitle = "برای اتصال، روی عینک بزن";
+  }
 
   return (
     <>
@@ -38,10 +114,13 @@ export function Home() {
             </span>
             <span className="text-[13px] opacity-90">{user ? `سلام، ${user.displayName}` : "خوش اومدی"}</span>
           </div>
-          <Link
-            to="/shop"
-            className="flex h-10 items-center gap-2.5 rounded-[13px] bg-pay-bar pe-1.5 ps-3.5 text-[13px] font-bold text-white no-underline"
-          >
+          {!user && (
+            <button type="button" onClick={showSignIn} className="glass-clear flex h-10 items-center gap-2 rounded-[13px] px-3.5 text-[13px] font-bold">
+              <Icon name="plane" size={16} />
+              ورود با تلگرام
+            </button>
+          )}
+          <Link to="/shop" className="flex h-10 items-center gap-2.5 rounded-[13px] bg-pay-bar pe-1.5 ps-3.5 text-[13px] font-bold text-white no-underline">
             خرید سرویس
             <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-white text-[#062845]">
               <Icon name="plus" size={16} stroke={2.6} />
@@ -53,80 +132,114 @@ export function Home() {
           <div className="relative flex h-[280px] w-[280px] shrink-0 items-center justify-center">
             <svg aria-hidden="true" width="280" height="280" viewBox="0 0 280 280" className="absolute inset-0">
               <circle cx="140" cy="140" r="128" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="6" />
+              {(on || connecting) && (
+                <circle
+                  cx="140"
+                  cy="140"
+                  r="128"
+                  fill="none"
+                  stroke="#00ACFE"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={on ? "805 805" : "300 805"}
+                  transform="rotate(90 140 140)"
+                  className={connecting ? "origin-center animate-spin [animation-duration:2.4s]" : ""}
+                />
+              )}
             </svg>
             <button
               type="button"
-              aria-label="اتصال"
-              onClick={() => setHint("اول یک سرویس بخر یا لینک اشتراکت را در «سرویس‌ها» اضافه کن.")}
-              className="glass-clear relative flex h-[236px] w-[236px] items-center justify-center rounded-full shadow-[0_0_0_14px_rgba(255,255,255,0.08),0_24px_50px_rgba(2,36,84,0.3)] transition-transform active:scale-[0.98]"
+              aria-label={on ? "قطع اتصال" : connecting ? "لغو اتصال" : "اتصال"}
+              disabled={busy && !connecting}
+              onClick={toggle}
+              className={`relative flex h-[236px] w-[236px] items-center justify-center rounded-full transition-transform active:scale-[0.98] ${
+                on ? "glass-milk shadow-[0_0_0_14px_rgba(255,255,255,0.12),0_24px_50px_rgba(2,36,84,0.35)]" : "glass-clear shadow-[0_0_0_14px_rgba(255,255,255,0.08),0_24px_50px_rgba(2,36,84,0.3)]"
+              }`}
             >
-              <Logo size={132} color="#FFFFFF" />
+              <span className={connecting ? "opacity-70" : ""}>
+                <Logo size={132} color={on ? "#00ACFE" : "#FFFFFF"} />
+              </span>
             </button>
           </div>
-          <div className="flex flex-1 flex-col gap-3.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-3.5">
             <span className="flex items-center gap-2 text-[15px] font-bold">
-              <span className="h-[9px] w-[9px] rounded-[2px] bg-white/60" />
-              قطع
+              <span
+                className={`h-[9px] w-[9px] rounded-[2px] ${on ? "bg-ok-bright" : connecting ? "bg-[#FFB547]" : state.status === "failed" ? "bg-bad" : "bg-white/60"}`}
+              />
+              {on ? "متصل و امن" : connecting ? "در حال اتصال" : state.status === "failed" ? "وصل نشد" : "قطع"}
             </span>
-            <span className="text-[28px] font-extrabold leading-tight">هنوز سروری نداری</span>
-            <span className="text-[13px] opacity-90" role="status">
-              {hint ?? "برای اتصال، روی عینک بزن"}
+            <span dir={on ? "ltr" : undefined} className={`leading-none ${on ? "text-right font-num text-[56px] font-bold tracking-[1px]" : "text-[28px] font-extrabold leading-tight"}`}>
+              {title}
             </span>
-            <Link
-              to="/services"
-              className="glass-milk mt-1.5 flex max-w-[380px] items-center gap-3 rounded-[20px] py-2.5 pe-3.5 ps-2.5 no-underline"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-soft text-link">
-                <Icon name="link" size={20} />
-              </span>
-              <span className="flex flex-1 flex-col gap-0.5">
-                <span className="text-xs text-ink-2">سرویس‌ها</span>
-                <span className="text-[15px] font-extrabold text-ink">افزودن لینک اشتراک</span>
-              </span>
-              <span className="flex text-muted">
-                <Icon name="chev" size={18} />
-              </span>
-            </Link>
+            <span className="text-[13px] leading-[1.8] opacity-90" role="status">
+              {state.status === "failed" ? state.message : subtitle}
+            </span>
+            {on && state.note && <span className="rounded-xl bg-white/15 px-3 py-2 text-xs leading-[1.8]">{state.note}</span>}
+            {server ? (
+              <Link to="/servers" className="glass-milk mt-1.5 flex max-w-[380px] items-center gap-3 rounded-[20px] py-2.5 pe-3.5 ps-2.5 no-underline">
+                <CountryBadge code={countryCode(server.name)} selected size={44} />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-xs text-ink-2">
+                    سرور · {view?.route === "smart" ? "مسیر هوشمند" : view?.route === "global" ? "مسیر سراسری" : "مسیر مستقیم"}
+                  </span>
+                  <span className="truncate text-[15px] font-extrabold text-ink">{plainName(server.name) || server.address}</span>
+                </span>
+                <PingBars ms={on ? state.delayMs : (server.delayMs ?? 0)} />
+                <span className="flex text-muted">
+                  <Icon name="chev" size={18} />
+                </span>
+              </Link>
+            ) : (
+              noServers && (
+                <Link to="/services" className="glass-milk mt-1.5 flex max-w-[380px] items-center gap-3 rounded-[20px] py-2.5 pe-3.5 ps-2.5 no-underline">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-soft text-link">
+                    <Icon name="link" size={20} />
+                  </span>
+                  <span className="flex flex-1 flex-col gap-0.5">
+                    <span className="text-xs text-ink-2">سرویس‌ها</span>
+                    <span className="text-[15px] font-extrabold text-ink">افزودن لینک اشتراک</span>
+                  </span>
+                  <span className="flex text-muted">
+                    <Icon name="chev" size={18} />
+                  </span>
+                </Link>
+              )
+            )}
           </div>
         </div>
 
         <div className="glass-clear flex rounded-[20px] px-1 py-3.5">
-          <Stat icon="dl" label="دانلود" value="—" />
+          <Stat icon="dl" label="دانلود" value={on ? down.value : "—"} unit={on ? down.unit : undefined} />
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="up" label="آپلود" value="—" />
+          <Stat icon="up" label="آپلود" value={on ? up.value : "—"} unit={on ? up.unit : undefined} />
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="globe" label="IP خروجی" value="—" />
+          <Stat icon="bolt" label="تأخیر" value={on ? `${state.delayMs}` : "—"} unit={on ? "ms" : undefined} />
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="hub" label="اتصالات فعال" value="—" />
+          <Stat icon="shield" label="پروکسی محلی" value={on ? `${state.httpPort}` : "—"} unit={on ? "HTTP" : undefined} />
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="clock" label="زمان باقی‌مانده" value="—" />
+          <Stat icon="clock" label="زمان باقی‌مانده" value={left === null ? "—" : `${faDigits(left)} روز`} />
         </div>
+
+        {on && <SpeedGraph />}
+
+        {quota && quota.quotaGib !== null && (
+          <div className="flex flex-col gap-2 px-1">
+            <div className="flex justify-between text-xs">
+              <span className="font-bold">
+                {account?.name} — {faDigits(quota.usedGib.toFixed(1))} از {faDigits(quota.quotaGib)} گیگ
+              </span>
+              <span className="opacity-90">{faDigits(Math.round((quota.usedGib / quota.quotaGib) * 100))}٪</span>
+            </div>
+            <div className="flex h-2.5 gap-[3px]" aria-hidden="true">
+              {Array.from({ length: 40 }, (_, i) => (
+                <span key={i} className={`flex-1 rounded-[3px] ${i < Math.round((quota.usedGib / (quota.quotaGib ?? 1)) * 40) ? "bg-white" : "bg-white/22"}`} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      <Card className="w-[360px] shrink-0 rounded-[26px]">
-        <CardTitle title="سرورها" subtitle="هنوز سروری اضافه نشده" />
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-ink">
-          <span className="flex h-16 w-16 items-center justify-center rounded-[21px] bg-soft text-link">
-            <Icon name="globe" size={30} stroke={1.8} />
-          </span>
-          <span className="text-base font-extrabold">فهرست سرورها خالی است</span>
-          <span className="max-w-[260px] text-[13px] leading-[1.9] text-ink-2">
-            {user
-              ? "سرویس‌های حسابت همراه هسته‌ی اتصال روی این کامپیوتر می‌آیند؛ یا لینک اشتراک خودت را اضافه کن."
-              : "با ورود به حسابت سرویس‌هایت خودکار اینجا می‌آیند؛ یا لینک اشتراک خودت را اضافه کن."}
-          </span>
-        </div>
-        {!user && (
-          <button
-            type="button"
-            onClick={showSignIn}
-            className="flex h-11 items-center justify-center gap-2 rounded-[14px] bg-action text-sm font-bold text-on-action shadow-[var(--gv-action-shadow)]"
-          >
-            <Icon name="plane" size={18} />
-            ورود با تلگرام
-          </button>
-        )}
-      </Card>
+      <ServerPanel />
     </>
   );
 }

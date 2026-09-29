@@ -279,6 +279,8 @@ GeekVPN-Desktop/
 | ۰ — معماری | تأیید شد |
 | ۱ — پوسته، پنجره‌ی بی‌قاب، سیستم طراحی | انجام شد |
 | ۲ — ورود با تلگرام و نشست امن | انجام شد و end-to-end روی GeekVPNBot واقعی (Postgres و Redis) تست شد |
+| ۳a — هسته، سرورها، پروکسی سیستم، اتصال | انجام شد و end-to-end روی لینوکس (GNOME) با یک سرور VLESS واقعی تست شد |
+| ۳b — helper، TUN، Kill Switch، تونل برنامه‌ای | بعدی |
 
 ### یادداشت‌های فاز ۲
 - `crates/geek-api`: کلاینت تایپ‌شده، `Session` با refresh یکی‌یکی (single-flight)، و `wait_for_approval` با retry و لغو. تست‌های قرارداد با fixtureهایی اجرا می‌شوند که از مدل‌های Pydantic خود بک‌اند ساخته شده‌اند (camelCase، `message_fa`).
@@ -288,3 +290,23 @@ GeekVPN-Desktop/
 - دو باگ بک‌اند که در این تست پیدا شد و در [amirhosseintowfighi/GeekVPNBot#7](https://github.com/amirhosseintowfighi/GeekVPNBot/pull/7) درست شد. اولی اپ اندروید را هم در production تحت تأثیر قرار می‌دهد:
   1. CSRF همه‌ی refreshهای بدون Bearer را با ۴۰۳ رد می‌کرد؛ در نتیجه نشست اپ‌ها بعد از ۱۵ دقیقه بی‌صدا از کار می‌افتاد.
   2. revoke شدن نشست بعد از تشخیص استفاده‌ی دوباره از refresh token، rollback می‌شد و توکن rotateشده همچنان کار می‌کرد.
+
+### یادداشت‌های فاز ۳a
+- **`core/geekcore`** (Go): همان commit ایکس‌ری اندروید (Xray 26.9.9) با همان patch (VLESS بدون TLS برای سرویس‌های تونل)، به‌علاوه‌ی `cfscan` از ریپوی اندروید. پروتکلش JSON خط‌به‌خط روی stdin/stdout است، با این متدها:
+  - `core.start` / `core.stop`: اجرا و توقف هسته
+  - `core.delay`: تست تأخیر روی اتصال زنده
+  - `core.traffic`: شمارنده‌های بایت
+  - `test.delay`: تست تأخیر واقعی موازی، مثل v2rayNG
+  - `scan.*`: اسکنر
+
+  ساخت با `scripts/build-geekcore.sh` انجام می‌شود و داده‌ی geo با `scripts/fetch-geo.sh`، از همان منبع اندروید.
+- **`crates/geek-config`**: لینک‌های vless، vmess، trojan و ss (با همان نام فیلدهای v2rayN و v2rayNG) و اشتراک base64 را به کانفیگ Xray تبدیل می‌کند. مسیر «هوشمند» قانون‌به‌قانون همان preset `WHITE_IRAN` در v2rayNG است. `domainStrategy: AsIs` است تا انتخاب مسیر هیچ درخواست DNS محلی نسازد.
+- **`crates/geek-core`**: سوپروایزر geekcore. هر فراخوانی timeout دارد. اگر هسته کرش کند، درخواست‌های در جریان فوراً با آخرین خط‌های لاگ fail می‌شوند و رویداد `core.exited` فرستاده می‌شود.
+- **`crates/geek-netplat`**: پروکسی سیستم.
+  - ویندوز: رجیستری Internet Settings به‌علاوه‌ی refresh از طریق WinINet
+  - مک: `networksetup` روی همه‌ی سرویس‌های شبکه‌ی فعال
+  - لینوکس: GNOME (`gsettings`) و KDE (`kioslaverc`)
+
+  تنظیمات قبلی قبل از هر تغییر روی دیسک نوشته می‌شود و این حالت‌ها برمی‌گردد: قطع اتصال، خروج، SIGTERM/SIGINT/SIGHUP، و شروع بعد از کرش.
+- **سرویس‌های حساب**: از `/api/miniapp/subscriptions` همگام می‌شوند؛ سرویس غیرفعال سرور ندارد. لینک‌های دستی دست نمی‌خورند، مثل `AccountSync` اندروید.
+- **تغییر نسبت به طرح فاز ۰:** در حالت پروکسی سیستم، خود Xray با inboundهای socks و http و قانون‌های مسیرش کار می‌کند و sing-box جلوی آن نیست. دلیلش این است که قطعه‌ی متحرک کمتری دارد و قانون‌های مسیر همان قانون‌های Xray اندروید است. sing-box با TUN در فاز ۳b وارد می‌شود.

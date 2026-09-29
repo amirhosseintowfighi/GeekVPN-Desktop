@@ -14,4 +14,4 @@ pub use client::ApiClient;
 pub use error::ApiError;
 pub use login::{telegram_app_link, wait_for_approval, LinkOutcome};
 pub use session::{Session, SessionError, TokenStore};
-pub use types::{AppUser, DeviceInfo, LinkPoll, LinkStart, LinkStatus, SignedIn, Tokens};
+pub use types::{AppUser, DeviceInfo, LinkPoll, LinkStart, LinkStatus, SignedIn, SubscriptionCard, Tokens};

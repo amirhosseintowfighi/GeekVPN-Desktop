@@ -1441,6 +1441,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "geek-config"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "hex",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "url",
+]
+
+[[package]]
+name = "geek-core"
+version = "0.1.0"
+dependencies = [
+ "geek-config",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "geek-netplat"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "windows-sys 0.59.0",
+ "winreg",
+]
+
+[[package]]
 name = "geek-secrets"
 version = "0.1.0"
 dependencies = [
@@ -1459,6 +1495,9 @@ name = "geekvpn-desktop"
 version = "0.1.0"
 dependencies = [
  "geek-api",
+ "geek-config",
+ "geek-core",
+ "geek-netplat",
  "geek-secrets",
  "qrcode",
  "serde",
@@ -4732,6 +4771,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

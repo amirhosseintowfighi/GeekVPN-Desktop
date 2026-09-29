@@ -266,3 +266,19 @@ async fn sign_out_is_local_even_when_the_server_is_unreachable() {
     assert!(session.user().await.is_none());
     assert!(store.load().unwrap().is_none());
 }
+
+#[tokio::test]
+async fn subscriptions_read_the_mini_apps_camelcase_cards() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/miniapp/subscriptions"))
+        .and(header("authorization", "Bearer acc-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(fixture("subscriptions.json")))
+        .mount(&server)
+        .await;
+    let cards = client(&server).subscriptions("acc-1").await.unwrap();
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].subscription_url.as_deref(), Some("https://sub.example.com/sub/TOKEN"));
+    assert_eq!(cards[0].tier.as_deref(), Some("direct"));
+    assert_eq!(cards[0].quota_gib, Some(40.0));
+}
