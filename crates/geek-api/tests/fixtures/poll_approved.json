@@ -1,0 +1,20 @@
+{
+  "status": "approved",
+  "tokens": {
+    "accessToken": "acc-1",
+    "refreshToken": "ref-1-xxxxxxxxxxxxxxxxxxxx",
+    "tokenType": "Bearer",
+    "accessExpiresAt": "2026-09-29T12:15:00Z",
+    "refreshExpiresAt": "2026-10-29T12:00:00Z",
+    "sessionId": "00000000-0000-0000-0000-000000000007"
+  },
+  "user": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "telegramId": 1011788123,
+    "displayName": "کاربر ۱۰۱۱۷۸۸۱۲۳",
+    "username": null,
+    "language": "fa",
+    "referralCode": "K7Q2MX",
+    "photoUrl": null
+  }
+}

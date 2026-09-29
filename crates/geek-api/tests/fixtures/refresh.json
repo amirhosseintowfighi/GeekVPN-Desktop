@@ -1,0 +1,8 @@
+{
+  "accessToken": "acc-2",
+  "refreshToken": "ref-2-yyyyyyyyyyyyyyyyyyyy",
+  "tokenType": "Bearer",
+  "accessExpiresAt": "2026-09-29T12:15:00Z",
+  "refreshExpiresAt": "2026-10-29T12:00:00Z",
+  "sessionId": "00000000-0000-0000-0000-000000000007"
+}

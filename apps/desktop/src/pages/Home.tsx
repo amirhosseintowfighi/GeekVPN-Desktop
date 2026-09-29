@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Icon, type IconName } from "../design-system/Icon";
 import { Logo } from "../design-system/Logo";
 import { Card, CardTitle } from "../design-system/layout";
+import { useAuth } from "../lib/AuthContext";
 
 /** One cell of the stats strip under the connect button (Desktop-Home). */
 function Stat({ icon, label, value }: { icon: IconName; label: string; value: string }) {
@@ -24,6 +25,8 @@ function Stat({ icon, label, value }: { icon: IconName; label: string; value: st
  */
 export function Home() {
   const [hint, setHint] = useState<string | null>(null);
+  const { view, showSignIn } = useAuth();
+  const user = view?.user ?? null;
 
   return (
     <>
@@ -33,7 +36,7 @@ export function Home() {
             <span dir="ltr" className="text-right font-num text-[22px] font-bold tracking-[-0.5px]">
               GeekVPN
             </span>
-            <span className="text-[13px] opacity-90">خوش اومدی</span>
+            <span className="text-[13px] opacity-90">{user ? `سلام، ${user.displayName}` : "خوش اومدی"}</span>
           </div>
           <Link
             to="/shop"
@@ -108,16 +111,21 @@ export function Home() {
           </span>
           <span className="text-base font-extrabold">فهرست سرورها خالی است</span>
           <span className="max-w-[260px] text-[13px] leading-[1.9] text-ink-2">
-            با ورود به حسابت سرویس‌هایت خودکار اینجا می‌آیند؛ یا لینک اشتراک خودت را اضافه کن.
+            {user
+              ? "سرویس‌های حسابت همراه هسته‌ی اتصال روی این کامپیوتر می‌آیند؛ یا لینک اشتراک خودت را اضافه کن."
+              : "با ورود به حسابت سرویس‌هایت خودکار اینجا می‌آیند؛ یا لینک اشتراک خودت را اضافه کن."}
           </span>
         </div>
-        <Link
-          to="/account"
-          className="flex h-11 items-center justify-center gap-2 rounded-[14px] bg-action text-sm font-bold text-on-action no-underline shadow-[var(--gv-action-shadow)]"
-        >
-          <Icon name="plane" size={18} />
-          ورود با تلگرام
-        </Link>
+        {!user && (
+          <button
+            type="button"
+            onClick={showSignIn}
+            className="flex h-11 items-center justify-center gap-2 rounded-[14px] bg-action text-sm font-bold text-on-action shadow-[var(--gv-action-shadow)]"
+          >
+            <Icon name="plane" size={18} />
+            ورود با تلگرام
+          </button>
+        )}
       </Card>
     </>
   );

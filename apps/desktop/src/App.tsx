@@ -1,4 +1,7 @@
 import { createHashRouter, RouterProvider } from "react-router";
+import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { Account } from "./pages/Account";
+import { Login } from "./pages/Login";
 import { AppShell } from "./shell/AppShell";
 import { Home } from "./pages/Home";
 import { Section } from "./pages/Section";
@@ -52,12 +55,24 @@ const router = createHashRouter([
         ),
       },
       { path: "support", element: <Section title="پشتیبانی" icon="chat" emptyTitle="تیکت‌های من" emptyText={GUEST} /> },
-      { path: "account", element: <Section title="حساب" icon="user" emptyTitle="وارد نشده‌ای" emptyText={GUEST} /> },
+      { path: "account", element: <Account /> },
       { path: "settings", element: <Settings /> },
     ],
   },
 ]);
 
-export function App() {
+/** Sign-in first, unless signed in or the customer chose to go on as a guest. */
+function Gate() {
+  const { view, isGuest } = useAuth();
+  if (view === null) return <div className="h-full w-full bg-bg" />;
+  if (!view.user && !isGuest) return <Login />;
   return <RouterProvider router={router} />;
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <Gate />
+    </AuthProvider>
+  );
 }
