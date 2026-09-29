@@ -171,7 +171,7 @@ pub async fn servers_add(
         let mut store = state.store.lock().await;
         store.data.sources.retain(|s| s.url.as_deref() != Some(text));
         store.data.sources.push(Source {
-            id: format!("link-{}", &servers[0].id),
+            id: format!("link-{}", servers[0].id),
             name: host,
             kind: SourceKind::Link,
             url: Some(text.to_string()),

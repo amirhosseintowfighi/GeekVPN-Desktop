@@ -356,6 +356,15 @@ mod tests {
     }
 
     #[test]
+    fn kde_switches_to_manual_with_the_local_ports() {
+        let v = linux_values::kde(&ProxySpec { http_port: 10809, socks_port: 10808 });
+        let get = |k: &str| v.iter().find(|(a, _)| a == k).map(|x| x.1.clone()).unwrap();
+        assert_eq!(get("ProxyType"), "1");
+        assert_eq!(get("httpProxy"), "http://127.0.0.1 10809");
+        assert_eq!(get("socksProxy"), "socks://127.0.0.1 10808");
+    }
+
+    #[test]
     fn snapshots_survive_the_disk() {
         let s = Snapshot::Windows { values: vec![("ProxyEnable".into(), Some(RegValue::Dword(0))), ("AutoConfigURL".into(), None)] };
         let back: Snapshot = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
