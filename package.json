@@ -1,0 +1,12 @@
+{
+  "name": "geekvpn-desktop-workspace",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm -C apps/desktop tauri dev",
+    "build": "pnpm -C apps/desktop tauri build",
+    "check": "pnpm -C apps/desktop check",
+    "test": "pnpm -C apps/desktop test"
+  }
+}

@@ -1,0 +1,134 @@
+/*
+ * GeekVPN "Sky Lens" tokens. Light values are Foundations.dc.html verbatim;
+ * dark values are the Android app's DarkGeekColors, so both clients share one
+ * palette. Components read only these variables, never raw colours.
+ */
+:root {
+  color-scheme: light;
+  --gv-bg: #0870d4;
+  --gv-glow: rgba(0, 172, 254, 0.55);
+  --gv-glow-strong: rgba(0, 172, 254, 0.45);
+
+  --gv-logo: #00acfe;
+  --gv-action: #062845;
+  --gv-on-action: #ffffff;
+  --gv-action-accent: #00acfe;
+  --gv-action-shadow: 0 10px 24px rgba(2, 24, 56, 0.35);
+
+  --gv-milk: rgba(255, 255, 255, 0.88);
+  --gv-milk-border: rgba(255, 255, 255, 0.95);
+  --gv-milk-highlight: #ffffff;
+  --gv-milk-shadow: 0 14px 34px rgba(2, 36, 84, 0.28);
+  --gv-clear: rgba(255, 255, 255, 0.13);
+  --gv-clear-border: rgba(255, 255, 255, 0.34);
+  --gv-clear-highlight: rgba(255, 255, 255, 0.45);
+  --gv-clear-shadow: 0 10px 26px rgba(2, 36, 84, 0.18);
+
+  --gv-on-bg: #ffffff;
+  --gv-on-bg-muted: rgba(255, 255, 255, 0.85);
+  --gv-text: #062845;
+  --gv-text-2: #3f5f7e;
+  --gv-muted: #5e7a94;
+  --gv-link: #0078c8;
+  --gv-soft: #eaf5fd;
+  --gv-soft-button: #eef5fb;
+  --gv-track: #d5e3ef;
+  --gv-hair: #e4eef6;
+  --gv-chip: #ffffff;
+  --gv-chip-border: #d5e3ef;
+  --gv-check: #c9d9e7;
+
+  --gv-ok: #0e9f6e;
+  --gv-ok-soft: #e3f8ef;
+  --gv-ok-bright: #7dffcb;
+  --gv-warn: #c77700;
+  --gv-warn-soft: #fff4e0;
+  --gv-bad: #d93f48;
+  --gv-bad-soft: #fff1f2;
+  --gv-bad-border: #f7c9cd;
+
+  --gv-pay-bar: #062845;
+  --gv-scrim: rgba(3, 27, 51, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --gv-bg: #041d38;
+    --gv-glow: rgba(8, 112, 212, 0.36);
+    --gv-glow-strong: rgba(0, 172, 254, 0.3);
+    --gv-action: #00acfe;
+    --gv-on-action: #031b33;
+    --gv-action-accent: #031b33;
+    --gv-action-shadow: 0 10px 24px rgba(0, 172, 254, 0.3);
+    --gv-milk: rgba(11, 42, 74, 0.88);
+    --gv-milk-border: rgba(255, 255, 255, 0.15);
+    --gv-milk-highlight: rgba(255, 255, 255, 0.2);
+    --gv-milk-shadow: 0 14px 34px rgba(0, 8, 20, 0.4);
+    --gv-clear: rgba(255, 255, 255, 0.09);
+    --gv-clear-border: rgba(255, 255, 255, 0.2);
+    --gv-clear-highlight: rgba(255, 255, 255, 0.25);
+    --gv-clear-shadow: 0 10px 26px rgba(0, 8, 20, 0.3);
+    --gv-on-bg-muted: rgba(255, 255, 255, 0.78);
+    --gv-text: #eaf5fd;
+    --gv-text-2: #9db7cf;
+    --gv-muted: #9db7cf;
+    --gv-link: #00acfe;
+    --gv-soft: #11375c;
+    --gv-soft-button: #123b61;
+    --gv-track: #24496d;
+    --gv-hair: #1c4166;
+    --gv-chip: #0f3357;
+    --gv-chip-border: #24496d;
+    --gv-check: #3b6187;
+    --gv-ok: #3cc896;
+    --gv-ok-soft: #0e3b33;
+    --gv-warn: #f0a63a;
+    --gv-warn-soft: #3d2e12;
+    --gv-bad: #f26b73;
+    --gv-bad-soft: #40202a;
+    --gv-bad-border: #6b2e3a;
+    --gv-pay-bar: #0b2a4a;
+    --gv-scrim: rgba(0, 8, 20, 0.7);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --gv-bg: #041d38;
+  --gv-glow: rgba(8, 112, 212, 0.36);
+  --gv-glow-strong: rgba(0, 172, 254, 0.3);
+  --gv-action: #00acfe;
+  --gv-on-action: #031b33;
+  --gv-action-accent: #031b33;
+  --gv-action-shadow: 0 10px 24px rgba(0, 172, 254, 0.3);
+  --gv-milk: rgba(11, 42, 74, 0.88);
+  --gv-milk-border: rgba(255, 255, 255, 0.15);
+  --gv-milk-highlight: rgba(255, 255, 255, 0.2);
+  --gv-milk-shadow: 0 14px 34px rgba(0, 8, 20, 0.4);
+  --gv-clear: rgba(255, 255, 255, 0.09);
+  --gv-clear-border: rgba(255, 255, 255, 0.2);
+  --gv-clear-highlight: rgba(255, 255, 255, 0.25);
+  --gv-clear-shadow: 0 10px 26px rgba(0, 8, 20, 0.3);
+  --gv-on-bg-muted: rgba(255, 255, 255, 0.78);
+  --gv-text: #eaf5fd;
+  --gv-text-2: #9db7cf;
+  --gv-muted: #9db7cf;
+  --gv-link: #00acfe;
+  --gv-soft: #11375c;
+  --gv-soft-button: #123b61;
+  --gv-track: #24496d;
+  --gv-hair: #1c4166;
+  --gv-chip: #0f3357;
+  --gv-chip-border: #24496d;
+  --gv-check: #3b6187;
+  --gv-ok: #3cc896;
+  --gv-ok-soft: #0e3b33;
+  --gv-warn: #f0a63a;
+  --gv-warn-soft: #3d2e12;
+  --gv-bad: #f26b73;
+  --gv-bad-soft: #40202a;
+  --gv-bad-border: #6b2e3a;
+  --gv-pay-bar: #0b2a4a;
+  --gv-scrim: rgba(0, 8, 20, 0.7);
+}

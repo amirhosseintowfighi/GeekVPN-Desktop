@@ -1,0 +1,96 @@
+@import "vazirmatn/Vazirmatn-Variable-font-face.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "./tokens.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Vazirmatn", Tahoma, sans-serif;
+  --font-num: "Space Grotesk", "Vazirmatn", sans-serif;
+
+  --color-bg: var(--gv-bg);
+  --color-logo: var(--gv-logo);
+  --color-action: var(--gv-action);
+  --color-on-action: var(--gv-on-action);
+  --color-action-accent: var(--gv-action-accent);
+  --color-on-bg: var(--gv-on-bg);
+  --color-on-bg-muted: var(--gv-on-bg-muted);
+  --color-ink: var(--gv-text);
+  --color-ink-2: var(--gv-text-2);
+  --color-muted: var(--gv-muted);
+  --color-link: var(--gv-link);
+  --color-soft: var(--gv-soft);
+  --color-soft-button: var(--gv-soft-button);
+  --color-track: var(--gv-track);
+  --color-hair: var(--gv-hair);
+  --color-chip: var(--gv-chip);
+  --color-chip-border: var(--gv-chip-border);
+  --color-check: var(--gv-check);
+  --color-ok: var(--gv-ok);
+  --color-ok-soft: var(--gv-ok-soft);
+  --color-ok-bright: var(--gv-ok-bright);
+  --color-warn: var(--gv-warn);
+  --color-warn-soft: var(--gv-warn-soft);
+  --color-bad: var(--gv-bad);
+  --color-bad-soft: var(--gv-bad-soft);
+  --color-bad-border: var(--gv-bad-border);
+  --color-pay-bar: var(--gv-pay-bar);
+}
+
+/* Milk glass: opaque-ish cards and sheets (Foundations "شیشه شیری"). */
+@utility glass-milk {
+  background: var(--gv-milk);
+  border: 1px solid var(--gv-milk-border);
+  box-shadow: inset 0 1px 0 var(--gv-milk-highlight), var(--gv-milk-shadow);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: var(--gv-text);
+}
+
+/* Clear glass: 13% white tiles over the backdrop. */
+@utility glass-clear {
+  background: var(--gv-clear);
+  border: 1px solid var(--gv-clear-border);
+  box-shadow: inset 0 1px 0 var(--gv-clear-highlight), var(--gv-clear-shadow);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  color: var(--gv-on-bg);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  body {
+    background: var(--gv-bg);
+    color: var(--gv-on-bg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+  input,
+  textarea {
+    user-select: text;
+  }
+  button {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--gv-logo);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

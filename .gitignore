@@ -1,0 +1,7 @@
+node_modules/
+dist/
+target/
+*.log
+.DS_Store
+apps/desktop/src-tauri/gen/
+__pycache__/
