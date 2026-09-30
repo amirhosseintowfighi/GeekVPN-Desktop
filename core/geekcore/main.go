@@ -56,7 +56,11 @@ func (o *out) send(v any) {
 func (o *out) emit(name string, data any) { o.send(event{Event: name, Data: data}) }
 
 func main() {
+	// The protocol owns the real stdout. Xray's console log writer resolves
+	// os.Stdout when an instance starts, so from here on it lands on stderr
+	// with the rest of the log instead of in the middle of a response.
 	o := &out{enc: json.NewEncoder(os.Stdout)}
+	os.Stdout = os.Stderr
 	e := newEngine(o)
 
 	in := bufio.NewScanner(os.Stdin)
