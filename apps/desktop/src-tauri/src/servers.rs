@@ -7,7 +7,7 @@ use geek_config::{delay_config, parse_subscription, AppRouting, Route, Server};
 use geek_ipc::KillSwitch;
 use serde::Serialize;
 use serde_json::json;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::auth::AuthState;
@@ -31,6 +31,10 @@ pub struct ServersView {
     auto_select: bool,
     route: Route,
     sort_by_ping: bool,
+    auto_connect: bool,
+    close_to_tray: bool,
+    shortcut: bool,
+    expiry_alert: bool,
     mode: Mode,
     kill_switch: bool,
     strict: bool,
@@ -46,6 +50,10 @@ fn view(store: &Store) -> ServersView {
         auto_select: store.data.auto_select,
         route: store.data.route,
         sort_by_ping: store.data.sort_by_ping,
+        auto_connect: store.data.auto_connect,
+        close_to_tray: store.data.close_to_tray,
+        shortcut: store.data.shortcut,
+        expiry_alert: store.data.expiry_alert,
         mode: store.data.mode,
         kill_switch: store.data.kill_switch,
         strict: store.data.strict,
@@ -155,6 +163,10 @@ pub async fn servers_refresh(
             Err(e) => problems.push(e.user_message()),
         }
     }
+    {
+        let mut store = state.store.lock().await;
+        crate::desktop::check_expiry(&app, &mut store.data);
+    }
     let v = changed(&app, &state).await?;
     match problems.first() {
         // Partial success still returns the list; the UI shows the problem.
@@ -239,11 +251,30 @@ pub struct Settings {
     strict: Option<bool>,
     allow_lan: Option<bool>,
     apps: Option<AppRouting>,
+    auto_connect: Option<bool>,
+    close_to_tray: Option<bool>,
+    shortcut: Option<bool>,
+    expiry_alert: Option<bool>,
 }
 
 #[tauri::command]
 pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, settings: Settings) -> Result<ServersView, String> {
-    let Settings { favorite, selected, auto_select, route, sort_by_ping, mode, kill_switch, strict, allow_lan, apps } = settings;
+    let Settings {
+        favorite,
+        selected,
+        auto_select,
+        route,
+        sort_by_ping,
+        mode,
+        kill_switch,
+        strict,
+        allow_lan,
+        apps,
+        auto_connect,
+        close_to_tray,
+        shortcut,
+        expiry_alert,
+    } = settings;
     {
         let mut store = state.store.lock().await;
         if let Some((id, on)) = favorite {
@@ -284,6 +315,18 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
             a.paths.dedup();
             store.data.apps = a;
         }
+        let d = &mut store.data;
+        for (slot, v) in [
+            (&mut d.auto_connect, auto_connect),
+            (&mut d.close_to_tray, close_to_tray),
+            (&mut d.shortcut, shortcut),
+            (&mut d.expiry_alert, expiry_alert),
+        ] {
+            if let Some(v) = v {
+                *slot = v;
+            }
+        }
+        crate::desktop::apply(&app, &store.data);
     }
     changed(&app, &state).await
 }
@@ -331,7 +374,13 @@ pub async fn tunnel_state(state: State<'_, ServersState>) -> Result<TunnelState,
 /// «اتصال»: the selected server, or with «خودکار» the fastest that answered
 /// (testing first if nothing has been tested yet), then the next ones.
 #[tauri::command]
-pub async fn tunnel_connect(app: AppHandle, state: State<'_, ServersState>) -> Result<(), String> {
+pub async fn tunnel_connect(app: AppHandle) -> Result<(), String> {
+    connect(&app).await
+}
+
+/// The same from the tray, the shortcut and auto-connect.
+pub async fn connect(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<ServersState>();
     let (auto, needs_test) = {
         let store = state.store.lock().await;
         (store.data.auto_select, store.data.auto_select && store.fastest().is_empty())
@@ -365,7 +414,7 @@ pub async fn tunnel_connect(app: AppHandle, state: State<'_, ServersState>) -> R
         };
         (list, opts)
     };
-    state.tunnel.connect(&app, candidates, opts).await?;
+    state.tunnel.connect(app, candidates, opts).await?;
     // Remember what worked, so the next manual connect starts there.
     if let TunnelState::On { server_id, .. } = &*state.tunnel.state.lock().await {
         state.store.lock().await.data.selected = Some(server_id.clone());

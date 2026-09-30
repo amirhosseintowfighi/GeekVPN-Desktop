@@ -64,6 +64,17 @@ pub struct Persisted {
     pub allow_lan: bool,
     /// «تونل برنامه‌ای» (TUN mode only).
     pub apps: AppRouting,
+    /// «اتصال خودکار بعد از اجرا».
+    pub auto_connect: bool,
+    /// «بستن = رفتن به کنار ساعت».
+    pub close_to_tray: bool,
+    /// Ctrl+Shift+K (⌘⇧K) connects and disconnects from anywhere.
+    pub shortcut: bool,
+    /// «هشدار تمام شدن سرویس»: 80% used or 3 days left.
+    pub expiry_alert: bool,
+    /// Subscription id → the day (YYYY-MM-DD) it was last warned about, so
+    /// the warning comes once a day, not on every refresh.
+    pub expiry_warned: HashMap<String, String>,
 }
 
 /// How other programs reach the tunnel.
@@ -92,6 +103,11 @@ impl Default for Persisted {
             strict: false,
             allow_lan: true,
             apps: AppRouting::default(),
+            auto_connect: false,
+            close_to_tray: true,
+            shortcut: true,
+            expiry_alert: true,
+            expiry_warned: HashMap::new(),
         }
     }
 }

@@ -8,6 +8,8 @@ import { faDigits } from "../lib/fa";
 import { inTauri } from "../lib/platform";
 import { system, type HelperStatus, type Mode, type Route } from "../lib/servers";
 import { applyTheme, loadTheme, type ThemeChoice } from "../lib/theme";
+import { desktop } from "../lib/desktop";
+import { currentOs } from "../lib/platform";
 import { useTunnel } from "../lib/TunnelContext";
 
 const THEMES = [
@@ -94,10 +96,19 @@ export function Settings() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState<ThemeChoice>(loadTheme);
   const [version, setVersion] = useState<string | null>(null);
+  const [autostart, setAutostart] = useState(false);
 
   useEffect(() => {
     if (inTauri) void getVersion().then(setVersion);
+    void desktop.autostart().then((a) => setAutostart(a.enabled), () => {});
   }, []);
+
+  const toggleAutostart = (v: boolean) =>
+    void desktop.autostart(v).then(
+      (a) => setAutostart(a.enabled),
+      () => {},
+    );
+  const osName = currentOs() === "windows" ? "ویندوز" : currentOs() === "macos" ? "مک" : "سیستم";
 
   const pick = (t: ThemeChoice) => {
     setTheme(t);
@@ -198,6 +209,42 @@ export function Settings() {
             <CardTitle title="ظاهر" subtitle="هماهنگ با سیستم، تم ویندوز، مک یا لینوکس را دنبال می‌کند" />
             <Segmented label="تم برنامه" options={THEMES} value={theme} onChange={pick} height={42} />
           </Card>
+          <Group label="عمومی">
+            <Row
+              icon="power"
+              title="اجرا با روشن شدن سیستم"
+              hint="کوچک‌شده در کنار ساعت شروع می‌شود"
+              trailing={<Switch label={`اجرا با ${osName}`} checked={autostart} onChange={toggleAutostart} />}
+            />
+            <Row
+              icon="bolt"
+              title="اتصال خودکار بعد از اجرا"
+              hint="با سرور و حالت انتخاب‌شده"
+              trailing={<Switch label="اتصال خودکار" checked={view?.autoConnect ?? false} onChange={(v) => void set({ autoConnect: v })} />}
+            />
+            <Row
+              icon="tray"
+              title="بستن = رفتن به کنار ساعت"
+              hint="برنامه و اتصال در tray می‌مانند"
+              trailing={<Switch label="کوچک به tray" checked={view?.closeToTray ?? true} onChange={(v) => void set({ closeToTray: v })} />}
+            />
+            <Row
+              icon="alert"
+              title="هشدار تمام شدن سرویس"
+              hint="۸۰٪ حجم یا ۳ روز مانده"
+              trailing={<Switch label="هشدار سرویس" checked={view?.expiryAlert ?? true} onChange={(v) => void set({ expiryAlert: v })} />}
+            />
+            <Row
+              icon="keyboard"
+              title="میانبر اتصال و قطع"
+              hint={
+                <span dir="ltr" className="font-num">
+                  {currentOs() === "macos" ? "⌘⇧K" : "Ctrl+Shift+K"}
+                </span>
+              }
+              trailing={<Switch label="میانبر سراسری" checked={view?.shortcut ?? true} onChange={(v) => void set({ shortcut: v })} />}
+            />
+          </Group>
           {version && (
             <Card>
               <CardTitle title="درباره‌ی برنامه" subtitle={`نسخه‌ی ${faDigits(version)} · لایسنس GPL-3.0`} />

@@ -57,6 +57,10 @@ export interface ServersView {
   autoSelect: boolean;
   route: Route;
   sortByPing: boolean;
+  autoConnect: boolean;
+  closeToTray: boolean;
+  shortcut: boolean;
+  expiryAlert: boolean;
   mode: Mode;
   killSwitch: boolean;
   strict: boolean;
@@ -96,6 +100,10 @@ export interface ServerSettings {
   autoSelect?: boolean;
   route?: Route;
   sortByPing?: boolean;
+  autoConnect?: boolean;
+  closeToTray?: boolean;
+  shortcut?: boolean;
+  expiryAlert?: boolean;
   mode?: Mode;
   killSwitch?: boolean;
   strict?: boolean;
@@ -110,6 +118,10 @@ const EMPTY: ServersView = {
   autoSelect: true,
   route: "smart",
   sortByPing: false,
+  autoConnect: false,
+  closeToTray: true,
+  shortcut: true,
+  expiryAlert: true,
   mode: "proxy",
   killSwitch: false,
   strict: false,

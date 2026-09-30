@@ -1,5 +1,8 @@
 import { createHashRouter, RouterProvider } from "react-router";
+import { useEffect } from "react";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { desktop, windowLabel } from "./lib/desktop";
+import { Flyout } from "./pages/Flyout";
 import { Account } from "./pages/Account";
 import { Connections } from "./pages/Connections";
 import { Login } from "./pages/Login";
@@ -47,6 +50,11 @@ const router = createHashRouter([
 /** Sign-in first, unless signed in or the customer chose to go on as a guest. */
 function Gate() {
   const { view, isGuest } = useAuth();
+  // «تنظیمات» and the like from the tray's panel open a page here.
+  useEffect(() => {
+    const off = desktop.onNavigate((path) => void router.navigate(path));
+    return () => void off.then((f) => f());
+  }, []);
   if (view === null) return <div className="h-full w-full bg-bg" />;
   if (!view.user && !isGuest) return <Login />;
   return (
@@ -57,6 +65,17 @@ function Gate() {
 }
 
 export function App() {
+  // The small panel beside the tray icon is its own window, without the
+  // shell and without the sign-in screen (that is the main window's job).
+  if (windowLabel() === "flyout") {
+    return (
+      <AuthProvider>
+        <TunnelProvider>
+          <Flyout />
+        </TunnelProvider>
+      </AuthProvider>
+    );
+  }
   return (
     <AuthProvider>
       <Gate />

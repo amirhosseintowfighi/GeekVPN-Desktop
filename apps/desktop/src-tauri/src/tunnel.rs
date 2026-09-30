@@ -97,6 +97,8 @@ pub struct Tunnel {
     /// switch is strict (a clean quit then leaves it to the helper).
     pub tun: Mutex<Option<(TunInfo, bool)>>,
     iran: OnceCell<RuleLists>,
+    /// Bytes up and down of the running connection, for the summary after it.
+    totals: std::sync::Mutex<(i64, i64)>,
 }
 
 impl Tunnel {
@@ -111,6 +113,7 @@ impl Tunnel {
             helper: Mutex::new(None),
             tun: Mutex::new(None),
             iran: OnceCell::new(),
+            totals: std::sync::Mutex::new((0, 0)),
         }
     }
 
@@ -150,7 +153,12 @@ impl Tunnel {
     }
 
     async fn set(&self, app: &AppHandle, s: TunnelState) {
-        *self.state.lock().await = s.clone();
+        let before = std::mem::replace(&mut *self.state.lock().await, s.clone());
+        let totals = *self.totals.lock().unwrap();
+        if matches!(s, TunnelState::Connecting { .. }) {
+            *self.totals.lock().unwrap() = (0, 0);
+        }
+        crate::desktop::on_state(app, &before, &s, totals);
         let _ = app.emit(STATE_EVENT, s);
     }
 
@@ -427,6 +435,7 @@ impl Tunnel {
                         }
                         let Ok(t) = core.call("core.traffic", json!({}), Duration::from_secs(3)).await else { continue };
                         let (up, down) = (t["up"].as_i64().unwrap_or(0), t["down"].as_i64().unwrap_or(0));
+                        *self.totals.lock().unwrap() = (up, down);
                         let now = Instant::now();
                         if let Some((at, up0, down0)) = last {
                             let secs = now.duration_since(at).as_secs_f64().max(0.001);
