@@ -6,6 +6,8 @@ export type Route = "smart" | "global" | "direct";
 /** «حالت اتصال»: the system proxy, or a TUN device through the helper. */
 export type Mode = "proxy" | "tun";
 export type AppMode = "off" | "bypass" | "only";
+/** «Failover»: when a running connection moves to a better server. */
+export type Failover = "off" | "lost" | "1000" | "2000" | "3000";
 
 export interface AppRouting {
   mode: AppMode;
@@ -61,6 +63,7 @@ export interface ServersView {
   closeToTray: boolean;
   shortcut: boolean;
   expiryAlert: boolean;
+  failover: Failover;
   mode: Mode;
   killSwitch: boolean;
   strict: boolean;
@@ -70,7 +73,8 @@ export interface ServersView {
 
 export type TunnelState =
   | { status: "off" }
-  | { status: "connecting"; serverId: string; attempt: number; of: number }
+  /** `stage`: smart connect finding a clean IP, testing servers, or trying `attempt` of `of`. */
+  | { status: "connecting"; serverId: string; attempt: number; of: number; stage: "findingIp" | "testing" | "connecting" }
   | {
       status: "on";
       serverId: string;
@@ -104,6 +108,7 @@ export interface ServerSettings {
   closeToTray?: boolean;
   shortcut?: boolean;
   expiryAlert?: boolean;
+  failover?: Failover;
   mode?: Mode;
   killSwitch?: boolean;
   strict?: boolean;
@@ -122,6 +127,7 @@ const EMPTY: ServersView = {
   closeToTray: true,
   shortcut: true,
   expiryAlert: true,
+  failover: "2000",
   mode: "proxy",
   killSwitch: false,
   strict: false,
@@ -193,4 +199,55 @@ export const system = {
   connections: () => call<ConnectionsView>("connections_list"),
   closeConnection: (id?: string) => call<void>("connections_close", { id: id ?? null }),
   programs: () => call<Program[]>("programs_running"),
+};
+
+export interface CleanIp {
+  ip: string;
+  port: number;
+  pingMs: number;
+  latencyMs: number;
+  jitterMs: number;
+  downloadKBps: number;
+  colo: string | null;
+}
+
+export interface ScanView {
+  network: { key: string; label: string };
+  candidates: { id: string; name: string; sni: string }[];
+  serverId: string | null;
+  results: CleanIp[];
+  scannedAt: number | null;
+  inUse: string | null;
+  behindCloudflare: boolean | null;
+  downloadTest: boolean;
+  running: boolean;
+}
+
+export type ScanEvent =
+  | { kind: "progress"; tested: number; total: number; found: number }
+  | { kind: "result"; result: CleanIp }
+  | { kind: "finish"; error: string | null };
+
+export interface SpeedResult {
+  pingMs: number | null;
+  jitterMs: number | null;
+  downloadMbps: number | null;
+  uploadMbps: number | null;
+  throughVpn: boolean;
+}
+
+export const scanner = {
+  state: (serverId?: string) => call<ScanView>("scan_state", { serverId: serverId ?? null }),
+  start: (serverId: string, download: boolean) => call<string | null>("scan_start", { serverId, download }),
+  stop: () => call<void>("scan_stop"),
+  use: (serverId: string, ip: string | null) => call<void>("scan_use", { serverId, ip }),
+  setDownload: (enabled: boolean) => call<void>("scan_set_download", { enabled }),
+  onEvent: (f: (e: ScanEvent) => void) => on("scan://progress", f),
+};
+
+export const tools = {
+  speedTest: () => call<SpeedResult>("speed_test"),
+  cancelSpeed: () => call<void>("speed_cancel"),
+  onSpeed: (f: (p: { phase: "ping" | "download" | "upload"; mbps: number }) => void) => on("speed://progress", f),
+  coreLog: () => call<string>("core_log"),
 };

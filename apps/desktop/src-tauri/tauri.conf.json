@@ -39,7 +39,7 @@
     "copyright": "GPL-3.0",
     "license": "GPL-3.0-only",
     "externalBin": ["binaries/geekcore", "binaries/geekvpn-helper", "binaries/geekvpn-sing-box"],
-    "resources": ["resources/geo/geoip.dat", "resources/geo/geosite.dat", "resources/geo/geoip-only-cn-private.dat"],
+    "resources": ["resources/geo/geoip.dat", "resources/geo/geosite.dat", "resources/geo/geoip-only-cn-private.dat", "resources/cfscan/ipv4.txt", "resources/cfscan/LICENSE.txt"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "macOS": { "minimumSystemVersion": "13.0" },
     "linux": {

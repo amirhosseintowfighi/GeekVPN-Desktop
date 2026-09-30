@@ -1,8 +1,10 @@
 mod auth;
 mod desktop;
+mod scan;
 mod servers;
 mod store;
 mod system;
+mod tools;
 mod tunnel;
 
 use std::sync::Arc;
@@ -119,6 +121,9 @@ pub fn run() {
             let saved = store::Store::load(data.join("servers.json"));
             let settings = saved.data.clone();
             app.manage(servers::ServersState { store: tokio::sync::Mutex::new(saved), tunnel: tunnel.clone() });
+            app.manage(scan::Ranges::new(app.path().resource_dir()?.join("resources").join("cfscan").join("ipv4.txt")));
+            app.manage(tools::SpeedRun::default());
+            app.manage(scan::ScanRun { running: tokio::sync::Mutex::new(None) });
             restore_on_signals(app.handle().clone(), tunnel);
             desktop::setup(app, &settings)?;
             Ok(())
@@ -144,6 +149,14 @@ pub fn run() {
             system::connections_list,
             system::connections_close,
             system::programs_running,
+            scan::scan_state,
+            scan::scan_start,
+            scan::scan_stop,
+            scan::scan_use,
+            scan::scan_set_download,
+            tools::speed_test,
+            tools::speed_cancel,
+            tools::core_log,
             desktop::desktop_autostart,
             desktop::desktop_open,
             desktop::desktop_quit,
