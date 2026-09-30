@@ -39,3 +39,20 @@ export function plainName(name: string): string {
     .join("")
     .trim();
 }
+
+/** A byte count as the Connections table writes it: "1.28 KB", "2.31 MB". */
+export function bytes(n: number): string {
+  if (n >= 1024 * 1024 * 1024) return `${(n / 1024 ** 3).toFixed(2)} GB`;
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(2)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(2)} KB`;
+  return `${n} B`;
+}
+
+/** How long ago `iso` was, in Persian: «همین الان», «۵ دقیقه پیش». */
+export function ago(iso: string, nowMs: number): string {
+  const s = Math.max(0, Math.floor((nowMs - Date.parse(iso)) / 1000));
+  if (!Number.isFinite(s) || s < 10) return "همین الان";
+  if (s < 60) return `${s} ثانیه پیش`;
+  if (s < 3600) return `${Math.floor(s / 60)} دقیقه پیش`;
+  return `${Math.floor(s / 3600)} ساعت پیش`;
+}

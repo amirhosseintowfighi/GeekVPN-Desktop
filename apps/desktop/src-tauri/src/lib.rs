@@ -1,6 +1,7 @@
 mod auth;
 mod servers;
 mod store;
+mod system;
 mod tunnel;
 
 use std::sync::Arc;
@@ -82,6 +83,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let version = app.package_info().version.to_string();
             let device = geek_secrets::device_info(&version, || {
@@ -125,6 +127,11 @@ pub fn run() {
             servers::tunnel_state,
             servers::tunnel_connect,
             servers::tunnel_disconnect,
+            system::helper_status,
+            system::helper_install,
+            system::connections_list,
+            system::connections_close,
+            system::programs_running,
         ])
         .build(tauri::generate_context!())
         .expect("GeekVPN failed to start")

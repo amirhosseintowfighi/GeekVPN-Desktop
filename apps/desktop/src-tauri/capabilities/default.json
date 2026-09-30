@@ -14,6 +14,7 @@
     "core:window:allow-close",
     "core:window:allow-set-always-on-top",
     "os:allow-platform",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "dialog:allow-open"
   ]
 }

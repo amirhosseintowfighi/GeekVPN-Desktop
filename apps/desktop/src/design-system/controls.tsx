@@ -69,7 +69,20 @@ export function IconButton({
   );
 }
 
-export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+/** `onNavy`: on the navy hero cards, where the usual navy track would vanish. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  onNavy,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  onNavy?: boolean;
+}) {
+  const track = checked ? (onNavy ? "justify-end bg-logo" : "justify-end bg-action") : onNavy ? "justify-start bg-white/25" : "justify-start bg-track";
+  const knob = checked ? (onNavy ? "bg-[#062845]" : "bg-action-accent") : "bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)]";
   return (
     <button
       type="button"
@@ -77,13 +90,9 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`flex h-[30px] w-[50px] shrink-0 items-center rounded-[9px] p-[3px] transition-colors ${
-        checked ? "justify-end bg-action" : "justify-start bg-track"
-      }`}
+      className={`flex h-[30px] w-[50px] shrink-0 items-center rounded-[9px] p-[3px] transition-colors ${track}`}
     >
-      <span
-        className={`h-6 w-6 rounded-[7px] ${checked ? "bg-action-accent" : "bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)]"}`}
-      />
+      <span className={`h-6 w-6 rounded-[7px] ${knob}`} />
     </button>
   );
 }

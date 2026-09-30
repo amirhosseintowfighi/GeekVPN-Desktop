@@ -1,6 +1,7 @@
 import { createHashRouter, RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { Account } from "./pages/Account";
+import { Connections } from "./pages/Connections";
 import { Login } from "./pages/Login";
 import { ServersPage } from "./pages/ServerList";
 import { Services } from "./pages/Services";
@@ -9,6 +10,7 @@ import { AppShell } from "./shell/AppShell";
 import { Home } from "./pages/Home";
 import { Section } from "./pages/Section";
 import { Settings } from "./pages/Settings";
+import { Split } from "./pages/Split";
 
 const GUEST = "برای دیدن این بخش باید وارد حسابت شوی.";
 
@@ -22,17 +24,7 @@ const router = createHashRouter([
       { path: "servers", element: <ServersPage /> },
       { path: "services", element: <Services /> },
       { path: "shop", element: <Section title="فروشگاه" icon="bag" emptyTitle="فروشگاه" emptyText={GUEST} /> },
-      {
-        path: "connections",
-        element: (
-          <Section
-            title="اتصالات"
-            icon="hub"
-            emptyTitle="اتصالی باز نیست"
-            emptyText="وقتی وصل باشی، هر اتصال با مقصد، برنامه، حجم و مسیرش اینجا دیده می‌شود."
-          />
-        ),
-      },
+      { path: "connections", element: <Connections /> },
       {
         path: "tools",
         element: (
@@ -47,6 +39,7 @@ const router = createHashRouter([
       { path: "support", element: <Section title="پشتیبانی" icon="chat" emptyTitle="تیکت‌های من" emptyText={GUEST} /> },
       { path: "account", element: <Account /> },
       { path: "settings", element: <Settings /> },
+      { path: "settings/split", element: <Split /> },
     ],
   },
 ]);

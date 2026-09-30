@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use geek_config::{Route, Server};
+use geek_config::{AppRouting, Route, Server};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +33,8 @@ pub enum SourceKind {
 pub struct Source {
     pub id: String,
     pub name: String,
+    /// Flattened: the UI reads `kind` and the account fields beside `id`.
+    #[serde(flatten)]
     pub kind: SourceKind,
     /// The subscription URL (account services and added links).
     pub url: Option<String>,
@@ -52,6 +54,27 @@ pub struct Persisted {
     /// Last real-delay result per server id; ≤ 0 means no answer.
     pub delays: HashMap<String, i64>,
     pub sort_by_ping: bool,
+    /// «حالت اتصال».
+    pub mode: Mode,
+    /// Kill Switch (TUN mode only, through the helper).
+    pub kill_switch: bool,
+    /// «حالت سخت‌گیر»: the kill switch holds after a crash or a reboot.
+    pub strict: bool,
+    /// «اجازه به شبکه‌ی محلی» while the kill switch is on.
+    pub allow_lan: bool,
+    /// «تونل برنامه‌ای» (TUN mode only).
+    pub apps: AppRouting,
+}
+
+/// How other programs reach the tunnel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// The system proxy: no administrator rights, only programs that read it.
+    #[default]
+    Proxy,
+    /// A TUN device through geekvpn-helper: every program.
+    Tun,
 }
 
 impl Default for Persisted {
@@ -64,6 +87,11 @@ impl Default for Persisted {
             route: Route::Smart,
             delays: HashMap::new(),
             sort_by_ping: false,
+            mode: Mode::Proxy,
+            kill_switch: false,
+            strict: false,
+            allow_lan: true,
+            apps: AppRouting::default(),
         }
     }
 }
@@ -216,15 +244,19 @@ mod wire {
             server_id: "s".into(),
             server_name: "n".into(),
             since_ms: 1,
+            mode: super::Mode::Tun,
             http_port: 2,
             socks_port: 3,
             delay_ms: 4,
+            kill_switch: true,
             note: None,
         })
         .unwrap();
         assert_eq!(on["status"], "on");
         assert_eq!(on["sinceMs"], 1);
         assert_eq!(on["httpPort"], 2);
+        assert_eq!(on["mode"], "tun");
+        assert_eq!(on["killSwitch"], true);
         let acc = serde_json::to_value(SourceKind::Account {
             subscription_id: "x".into(),
             tier: None,
@@ -237,5 +269,27 @@ mod wire {
         assert_eq!(acc["kind"], "account");
         assert_eq!(acc["quotaGib"], 40.0);
         assert!(acc.get("subscriptionId").is_some());
+
+        // A source carries its kind flattened, as `Source` in lib/servers.ts.
+        let src = serde_json::to_value(super::Source {
+            id: "geek-x".into(),
+            name: "n".into(),
+            kind: SourceKind::Account {
+                subscription_id: "x".into(),
+                tier: None,
+                state: "active".into(),
+                expires_at: None,
+                quota_gib: Some(40.0),
+                used_gib: 1.0,
+            },
+            url: None,
+            links: vec![],
+            updated_at: None,
+        })
+        .unwrap();
+        assert_eq!(src["kind"], "account");
+        assert_eq!(src["quotaGib"], 40.0);
+        let back: super::Source = serde_json::from_value(src).unwrap();
+        assert!(matches!(back.kind, SourceKind::Account { .. }));
     }
 }

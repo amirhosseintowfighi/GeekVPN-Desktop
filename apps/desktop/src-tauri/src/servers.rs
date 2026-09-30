@@ -3,15 +3,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use geek_config::{delay_config, parse_subscription, Route, Server};
+use geek_config::{delay_config, parse_subscription, AppRouting, Route, Server};
+use geek_ipc::KillSwitch;
 use serde::Serialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::auth::AuthState;
-use crate::store::{ServerView, Source, SourceKind, Store};
-use crate::tunnel::{probe_url, Tunnel, TunnelState};
+use crate::store::{Mode, ServerView, Source, SourceKind, Store};
+use crate::tunnel::{probe_url, ConnectOptions, Tunnel, TunnelState};
 
 pub const CHANGED: &str = "servers://changed";
 pub const DELAY: &str = "servers://delay";
@@ -30,6 +31,11 @@ pub struct ServersView {
     auto_select: bool,
     route: Route,
     sort_by_ping: bool,
+    mode: Mode,
+    kill_switch: bool,
+    strict: bool,
+    allow_lan: bool,
+    apps: AppRouting,
 }
 
 fn view(store: &Store) -> ServersView {
@@ -40,6 +46,11 @@ fn view(store: &Store) -> ServersView {
         auto_select: store.data.auto_select,
         route: store.data.route,
         sort_by_ping: store.data.sort_by_ping,
+        mode: store.data.mode,
+        kill_switch: store.data.kill_switch,
+        strict: store.data.strict,
+        allow_lan: store.data.allow_lan,
+        apps: store.data.apps.clone(),
     }
 }
 
@@ -214,16 +225,25 @@ pub async fn servers_remove_source(app: AppHandle, state: State<'_, ServersState
     changed(&app, &state).await
 }
 
-#[tauri::command]
-pub async fn servers_set(
-    app: AppHandle,
-    state: State<'_, ServersState>,
+/// Every connection setting the UI changes; each is optional.
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Settings {
     favorite: Option<(String, bool)>,
     selected: Option<String>,
     auto_select: Option<bool>,
     route: Option<Route>,
     sort_by_ping: Option<bool>,
-) -> Result<ServersView, String> {
+    mode: Option<Mode>,
+    kill_switch: Option<bool>,
+    strict: Option<bool>,
+    allow_lan: Option<bool>,
+    apps: Option<AppRouting>,
+}
+
+#[tauri::command]
+pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, settings: Settings) -> Result<ServersView, String> {
+    let Settings { favorite, selected, auto_select, route, sort_by_ping, mode, kill_switch, strict, allow_lan, apps } = settings;
     {
         let mut store = state.store.lock().await;
         if let Some((id, on)) = favorite {
@@ -246,6 +266,23 @@ pub async fn servers_set(
         }
         if let Some(p) = sort_by_ping {
             store.data.sort_by_ping = p;
+        }
+        if let Some(m) = mode {
+            store.data.mode = m;
+        }
+        if let Some(k) = kill_switch {
+            store.data.kill_switch = k;
+        }
+        if let Some(s) = strict {
+            store.data.strict = s;
+        }
+        if let Some(l) = allow_lan {
+            store.data.allow_lan = l;
+        }
+        if let Some(mut a) = apps {
+            a.paths.retain(|p| !p.trim().is_empty());
+            a.paths.dedup();
+            store.data.apps = a;
         }
     }
     changed(&app, &state).await
@@ -302,7 +339,7 @@ pub async fn tunnel_connect(app: AppHandle, state: State<'_, ServersState>) -> R
     if needs_test {
         servers_test(app.clone(), state.clone()).await?;
     }
-    let (candidates, route) = {
+    let (candidates, opts) = {
         let store = state.store.lock().await;
         let chosen = store.data.selected.as_deref().and_then(|id| store.find(id));
         let list = match (auto, chosen) {
@@ -318,9 +355,17 @@ pub async fn tunnel_connect(app: AppHandle, state: State<'_, ServersState>) -> R
                 }
             }
         };
-        (list, store.data.route)
+        let d = &store.data;
+        let opts = ConnectOptions {
+            route: d.route,
+            mode: d.mode,
+            // The kill switch lives in the helper, so it comes with TUN mode.
+            kill_switch: (d.mode == Mode::Tun && d.kill_switch).then_some(KillSwitch { allow_lan: d.allow_lan, strict: d.strict }),
+            apps: d.apps.clone(),
+        };
+        (list, opts)
     };
-    state.tunnel.connect(&app, candidates, route).await?;
+    state.tunnel.connect(&app, candidates, opts).await?;
     // Remember what worked, so the next manual connect starts there.
     if let TunnelState::On { server_id, .. } = &*state.tunnel.state.lock().await {
         state.store.lock().await.data.selected = Some(server_id.clone());

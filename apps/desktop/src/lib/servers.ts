@@ -3,6 +3,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { inTauri } from "./platform";
 
 export type Route = "smart" | "global" | "direct";
+/** «حالت اتصال»: the system proxy, or a TUN device through the helper. */
+export type Mode = "proxy" | "tun";
+export type AppMode = "off" | "bypass" | "only";
+
+export interface AppRouting {
+  mode: AppMode;
+  paths: string[];
+}
 
 export interface ServerView {
   id: string;
@@ -49,6 +57,11 @@ export interface ServersView {
   autoSelect: boolean;
   route: Route;
   sortByPing: boolean;
+  mode: Mode;
+  killSwitch: boolean;
+  strict: boolean;
+  allowLan: boolean;
+  apps: AppRouting;
 }
 
 export type TunnelState =
@@ -59,12 +72,16 @@ export type TunnelState =
       serverId: string;
       serverName: string;
       sinceMs: number;
+      mode: Mode;
+      /** The local proxy ports; 0 in TUN mode. */
       httpPort: number;
       socksPort: number;
       delayMs: number;
+      killSwitch: boolean;
       note: string | null;
     }
-  | { status: "failed"; message: string };
+  /** `blocking`: the kill switch still holds the internet shut. */
+  | { status: "failed"; message: string; blocking: boolean };
 
 export interface TunnelStats {
   downBps: number;
@@ -79,9 +96,26 @@ export interface ServerSettings {
   autoSelect?: boolean;
   route?: Route;
   sortByPing?: boolean;
+  mode?: Mode;
+  killSwitch?: boolean;
+  strict?: boolean;
+  allowLan?: boolean;
+  apps?: AppRouting;
 }
 
-const EMPTY: ServersView = { sources: [], servers: [], selected: null, autoSelect: true, route: "smart", sortByPing: false };
+const EMPTY: ServersView = {
+  sources: [],
+  servers: [],
+  selected: null,
+  autoSelect: true,
+  route: "smart",
+  sortByPing: false,
+  mode: "proxy",
+  killSwitch: false,
+  strict: false,
+  allowLan: true,
+  apps: { mode: "off", paths: [] },
+};
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!inTauri) return Promise.reject("این کار فقط داخل برنامه‌ی GeekVPN انجام می‌شود.");
@@ -97,7 +131,7 @@ export const servers = {
   refresh: () => call<ServersView>("servers_refresh"),
   add: (text: string) => call<ServersView>("servers_add", { text }),
   removeSource: (id: string) => call<ServersView>("servers_remove_source", { id }),
-  set: (s: ServerSettings) => call<ServersView>("servers_set", { ...s }),
+  set: (settings: ServerSettings) => call<ServersView>("servers_set", { settings }),
   test: () => call<ServersView>("servers_test"),
   onChanged: (f: () => void) => on<null>("servers://changed", () => f()),
   onDelay: (f: (r: { id: string; ms: number }) => void) => on("servers://delay", f),
@@ -109,4 +143,42 @@ export const tunnel = {
   disconnect: () => call<void>("tunnel_disconnect"),
   onState: (f: (s: TunnelState) => void) => on("tunnel://state", f),
   onStats: (f: (s: TunnelStats) => void) => on("tunnel://stats", f),
+};
+
+export type HelperStatus =
+  | { state: "missing"; reason: string }
+  | { state: "outdated"; version: string }
+  | { state: "ready"; version: string; singBox: string };
+
+export interface Connection {
+  id: string;
+  host: string;
+  port: string;
+  network: string;
+  process: string;
+  processPath: string;
+  upload: number;
+  download: number;
+  /** RFC 3339. */
+  start: string;
+  route: "proxy" | "direct" | string;
+}
+
+export interface ConnectionsView {
+  /** False unless connected in TUN mode. */
+  available: boolean;
+  connections: Connection[];
+}
+
+export interface Program {
+  name: string;
+  path: string;
+}
+
+export const system = {
+  helperStatus: () => call<HelperStatus>("helper_status"),
+  helperInstall: () => call<HelperStatus>("helper_install"),
+  connections: () => call<ConnectionsView>("connections_list"),
+  closeConnection: (id?: string) => call<void>("connections_close", { id: id ?? null }),
+  programs: () => call<Program[]>("programs_running"),
 };

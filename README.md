@@ -11,6 +11,8 @@
 
 ```bash
 scripts/build-geekcore.sh   # Go 1.27 به بعد (GOTOOLCHAIN=auto خودش می‌گیرد)
+scripts/build-singbox.sh    # sing-box برای حالت TUN (نسخه‌ی پین‌شده)
+scripts/build-helper.sh     # geekvpn-helper، سرویس TUN و Kill Switch
 scripts/fetch-geo.sh        # geoip.dat و geosite.dat
 ```
 
@@ -28,6 +30,15 @@ pnpm build        # بسته‌ی نصبی سیستم‌عامل فعلی
 ```
 
 `pnpm -C apps/desktop dev` فقط UI را در مرورگر روی `localhost:1420` بالا می‌آورد.
+
+## سرویس GeekVPN (حالت TUN)
+
+حالت TUN و Kill Switch به `geekvpn-helper` نیاز دارند که با دسترسی root یا SYSTEM اجرا می‌شود. بسته‌ی `.deb` و `.rpm` آن را خودشان نصب می‌کنند. در بقیه‌ی حالت‌ها دکمه‌ی «نصب سرویس» در تنظیمات این کار را می‌کند. دستی:
+
+```bash
+sudo target/release/geekvpn-helper install     # یا uninstall
+sudo geekvpn-helper run --console               # بدون سرویس، برای دیباگ
+```
 
 ## آدرس بک‌اند
 
