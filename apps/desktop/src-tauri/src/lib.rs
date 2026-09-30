@@ -1,11 +1,15 @@
 mod auth;
 mod desktop;
+mod report;
 mod scan;
 mod servers;
+mod shop;
 mod store;
+mod support;
 mod system;
 mod tools;
 mod tunnel;
+mod usage;
 
 use std::sync::Arc;
 
@@ -111,11 +115,12 @@ pub fn run() {
             };
             let session = Arc::new(Session::restore(api, store));
             tauri::async_runtime::spawn(auth::revalidate(app.handle().clone(), session.clone()));
+            app.manage(shop::ShopState::default());
             app.manage(auth::AuthState::new(session, device));
 
             let data = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data)?;
-            let tunnel = Arc::new(tunnel::Tunnel::new(core_binary()?, geo_dir(app)?, data.join("proxy-snapshot.json")));
+            let tunnel = Arc::new(tunnel::Tunnel::new(core_binary()?, geo_dir(app)?, data.join("proxy-snapshot.json"), data.join("usage.json")));
             // A previous run that died connected left the system proxy on.
             tunnel.recover();
             let saved = store::Store::load(data.join("servers.json"));
@@ -124,6 +129,8 @@ pub fn run() {
             app.manage(scan::Ranges::new(app.path().resource_dir()?.join("resources").join("cfscan").join("ipv4.txt")));
             app.manage(tools::SpeedRun::default());
             app.manage(scan::ScanRun { running: tokio::sync::Mutex::new(None) });
+            app.manage(support::SupportState::new(data.join("support-seen.json")));
+            support::watch(app.handle().clone(), app.state::<auth::AuthState>().session.clone());
             restore_on_signals(app.handle().clone(), tunnel);
             desktop::setup(app, &settings)?;
             Ok(())
@@ -157,6 +164,29 @@ pub fn run() {
             tools::speed_test,
             tools::speed_cancel,
             tools::core_log,
+            usage::usage_local,
+            shop::shop_load,
+            shop::shop_quote,
+            shop::shop_coupon,
+            shop::shop_checkout,
+            shop::shop_open_gateway,
+            shop::shop_pending,
+            shop::shop_receipt,
+            shop::shop_txid,
+            shop::trial_claim,
+            shop::wallet_load,
+            shop::wallet_transactions,
+            shop::wallet_topup,
+            shop::referral_load,
+            shop::usage_service,
+            support::tickets_list,
+            support::support_unread,
+            support::ticket_thread,
+            support::ticket_reply,
+            support::ticket_open,
+            support::report_preview,
+            support::report_send,
+            support::support_open_bot,
             desktop::desktop_autostart,
             desktop::desktop_open,
             desktop::desktop_quit,

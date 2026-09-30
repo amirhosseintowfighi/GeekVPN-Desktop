@@ -1,0 +1,12 @@
+[
+  {
+    "ticketId": "00000000-0000-0000-0000-000000000028",
+    "reference": "SUP-1405-000040",
+    "topicFa": "مشکل اتصال",
+    "state": "waiting",
+    "createdAt": "2026-09-27T10:30:00+00:00",
+    "lastMessageFa": "",
+    "unreadCount": 2,
+    "lastReplyAt": "2026-09-27T10:30:00+00:00"
+  }
+]

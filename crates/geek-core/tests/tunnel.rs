@@ -122,7 +122,7 @@ async fn a_vless_tunnel_carries_http_through_the_local_proxy() {
 
     // Global: local addresses would otherwise go direct and prove nothing.
     let ports = LocalPorts { socks: free_port().await, http: free_port().await };
-    let cfg = client_config(&s, None, Route::Global, ports);
+    let cfg = client_config(&s, None, Route::Global, &[], ports);
     // Reach the origin through the tunnel even though it is on loopback.
     let mut cfg = cfg;
     cfg["routing"]["rules"] = json!([{ "type": "field", "outboundTag": "proxy", "network": "tcp,udp" }]);

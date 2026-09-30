@@ -77,3 +77,79 @@ describe("connection figures", () => {
     expect(ago("2026-09-30T09:55:00Z", now)).toBe("5 دقیقه پیش");
   });
 });
+
+import { durationLabel, planGrid, sizeFa, toman, usageSummary, type Storefront } from "./account";
+import { percent } from "../pages/Referral";
+
+describe("shop", () => {
+  const plan = (planId: string, durationDays: number, quotaGib: number | null, isFeatured = false) => ({
+    planId,
+    nameFa: planId,
+    planType: "volume",
+    durationDays,
+    price: 1000,
+    compareAtPrice: null,
+    quotaGib,
+    dailyQuotaGib: null,
+    deviceLimit: 2,
+    badgeFa: null,
+    isFeatured,
+    descriptionFa: null,
+  });
+  const product = (tier: string, plans: ReturnType<typeof plan>[]) => ({
+    productId: tier,
+    tier,
+    nameFa: tier,
+    taglineFa: null,
+    descriptionFa: null,
+    featuresFa: [],
+    badgeFa: null,
+    isFeatured: false,
+    plans,
+  });
+  const store: Storefront = {
+    categories: [
+      { categoryId: "c", nameFa: "c", icon: null, products: [product("direct", [plan("a", 30, 40), plan("b", 30, null), plan("c", 90, 20), plan("d", 30, 10)]), product("tunnel", [])] },
+      { categoryId: "e", nameFa: "e", icon: null, products: [product("elite", [plan("x", 30, 50)])] },
+    ],
+    walletBalance: 0,
+    loyaltyTier: "bronze",
+    isFirstPurchase: true,
+  };
+
+  it("offers only tiers that have plans, durations in order, volumes smallest first with unlimited last", () => {
+    const g = planGrid(store);
+    expect(g.tiers).toEqual(["direct", "elite"]);
+    expect(g.durations("direct")).toEqual([30, 90]);
+    expect(g.volumes("direct", 30).map((p) => p.planId)).toEqual(["d", "a", "b"]);
+    expect(planGrid(null).tiers).toEqual([]);
+  });
+
+  it("writes money, durations and shares in Persian", () => {
+    expect(toman(150000)).toBe("۱۵۰٬۰۰۰");
+    expect(durationLabel(90)).toBe("۳ ماهه");
+    expect(durationLabel(45)).toBe("۴۵ روزه");
+    expect(percent(1000)).toBe("٪۱۰");
+    expect(percent(250)).toBe("٪۲٫۵");
+  });
+});
+
+describe("usage", () => {
+  it("sums, averages and finds the busiest day", () => {
+    const s = usageSummary([
+      { day: "2026-09-28", bytes: 0 },
+      { day: "2026-09-29", bytes: 3 * 1024 ** 3 },
+      { day: "2026-09-30", bytes: 1024 ** 3 },
+    ]);
+    expect(s.total).toBe(4 * 1024 ** 3);
+    expect(s.peak?.day).toBe("2026-09-29");
+    expect(usageSummary([{ day: "x", bytes: 0 }]).peak).toBeNull();
+  });
+
+  it("sizes in Persian units", () => {
+    expect(sizeFa(46.6 * 1024 ** 3)).toEqual({ value: "۴۶٫۶", unit: "گیگ" });
+    expect(sizeFa(1.55 * 1024 ** 3)).toEqual({ value: "۱٫۵۵", unit: "گیگ" });
+    expect(sizeFa(312 * 1024 ** 2)).toEqual({ value: "۳۱۲", unit: "مگ" });
+    expect(sizeFa(0)).toEqual({ value: "۰", unit: "مگ" });
+  });
+});

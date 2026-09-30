@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use geek_config::{delay_config, parse_subscription, AppRouting, FailoverThreshold, Route, Server};
+use geek_config::{delay_config, parse_rule, parse_subscription, AppRouting, CustomRule, FailoverThreshold, Route, Server, MAX_RULES};
 use geek_ipc::KillSwitch;
 use serde::Serialize;
 use serde_json::json;
@@ -42,6 +42,7 @@ pub struct ServersView {
     strict: bool,
     allow_lan: bool,
     apps: AppRouting,
+    rules: Vec<CustomRule>,
 }
 
 fn view(store: &Store) -> ServersView {
@@ -62,6 +63,7 @@ fn view(store: &Store) -> ServersView {
         strict: store.data.strict,
         allow_lan: store.data.allow_lan,
         apps: store.data.apps.clone(),
+        rules: store.data.rules.clone(),
     }
 }
 
@@ -259,6 +261,23 @@ pub struct Settings {
     shortcut: Option<bool>,
     expiry_alert: Option<bool>,
     failover: Option<FailoverThreshold>,
+    rules: Option<Vec<CustomRule>>,
+}
+
+/// Normalises the customer's rules and refuses a broken one with its reason,
+/// so what is saved is what both engines will read. A later rule for the same
+/// site replaces the earlier one.
+fn clean_rules(rules: Vec<CustomRule>) -> Result<Vec<CustomRule>, String> {
+    if rules.len() > MAX_RULES {
+        return Err(format!("حداکثر {MAX_RULES} قانون."));
+    }
+    let mut out: Vec<CustomRule> = vec![];
+    for r in rules {
+        let value = geek_config::rule_display(&parse_rule(&r.value).map_err(|e| format!("{}: {e}", r.value.trim()))?);
+        out.retain(|o| o.value != value);
+        out.push(CustomRule { value, action: r.action });
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -279,6 +298,7 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
         shortcut,
         expiry_alert,
         failover,
+        rules,
     } = settings;
     {
         let mut store = state.store.lock().await;
@@ -333,6 +353,9 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
         }
         if let Some(f) = failover {
             store.data.failover = f;
+        }
+        if let Some(r) = rules {
+            store.data.rules = clean_rules(r)?;
         }
         crate::desktop::apply(&app, &store.data);
     }
@@ -501,6 +524,7 @@ pub async fn connect(app: &AppHandle) -> Result<(), String> {
             // The kill switch lives in the helper, so it comes with TUN mode.
             kill_switch: (d.mode == Mode::Tun && d.kill_switch).then_some(KillSwitch { allow_lan: d.allow_lan, strict: d.strict }),
             apps: d.apps.clone(),
+            rules: d.rules.clone(),
         };
         (list, opts)
     };

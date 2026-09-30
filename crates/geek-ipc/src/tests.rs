@@ -10,6 +10,7 @@ fn spec() -> TunSpec {
         direct: RuleLists::default(),
         apps: AppRouting::default(),
         core_paths: vec!["/x/geekcore".into()],
+        rules: vec![],
     }
 }
 

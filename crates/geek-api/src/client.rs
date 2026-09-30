@@ -34,7 +34,7 @@ impl ApiClient {
         Ok(Self { http, base })
     }
 
-    fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ApiError> {
+    pub(crate) fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ApiError> {
         let url = self.base.join(path).map_err(|e| ApiError::Decode(e.to_string()))?;
         Ok(self.http.request(method, url).timeout(REQUEST_TIMEOUT))
     }
@@ -127,6 +127,11 @@ impl ApiClient {
 enum Auth {
     None,
     Session,
+}
+
+/// A Bearer call whose 401 means the session is over.
+pub(crate) async fn send_session<T: DeserializeOwned>(req: RequestBuilder) -> Result<T, ApiError> {
+    send(req, Auth::Session).await
 }
 
 async fn send<T: DeserializeOwned>(req: RequestBuilder, auth: Auth) -> Result<T, ApiError> {

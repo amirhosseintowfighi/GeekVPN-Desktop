@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::geo::RuleLists;
+use crate::rules::{singbox_rules, CustomRule};
 use crate::xray::Route;
 
 /// Firewall mark on everything sing-box sends itself (Linux): the kill
@@ -63,6 +64,9 @@ pub struct TunSpec {
     pub apps: AppRouting,
     /// The executables of the app's own engine: always direct.
     pub core_paths: Vec<String>,
+    /// The customer's own domain and address rules, after the apps'.
+    #[serde(default)]
+    pub rules: Vec<CustomRule>,
 }
 
 /// What the helper decides on its own about the machine.
@@ -118,6 +122,9 @@ pub fn tun_config(spec: &TunSpec, host: &TunHost) -> Value {
             dns_rules.push(json!({ "process_path": apps, "invert": true, "server": "local" }));
         }
     }
+    let (custom, custom_dns) = singbox_rules(&spec.rules);
+    rules.extend(custom);
+    dns_rules.extend(custom_dns);
     let mut rule_set = vec![];
     if smart {
         // Same as Xray's Smart: QUIC blocked so browsers fall back to TCP,

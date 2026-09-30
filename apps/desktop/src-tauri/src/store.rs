@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use geek_config::{profile_key, AppRouting, CdnTarget, CleanIp, FailoverThreshold, Route, Server, STALE_AFTER_MS};
+use geek_config::{profile_key, AppRouting, CdnTarget, CleanIp, CustomRule, FailoverThreshold, Route, Server, STALE_AFTER_MS};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +26,18 @@ pub enum SourceKind {
     Link,
     /// Share links pasted one by one.
     Manual,
+}
+
+impl SourceKind {
+    /// What «گزارش مشکل» says about where a server came from.
+    pub fn label(&self) -> &str {
+        match self {
+            SourceKind::Account { tier: Some(t), .. } => t,
+            SourceKind::Account { .. } => "account service",
+            SourceKind::Link => "subscription link",
+            SourceKind::Manual => "manual link",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +91,8 @@ pub struct Persisted {
     pub failover: FailoverThreshold,
     /// The clean-IP scanner's memory.
     pub scan: ScanData,
+    /// «قوانین دامنه و IP», in order; the first that matches decides.
+    pub rules: Vec<CustomRule>,
 }
 
 /// Results per (domain, network), overrides per (server, network), and
@@ -156,6 +170,7 @@ impl Default for Persisted {
             expiry_warned: HashMap::new(),
             failover: FailoverThreshold::default(),
             scan: ScanData::default(),
+            rules: Vec::new(),
         }
     }
 }

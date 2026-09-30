@@ -99,7 +99,7 @@ fn subscription_bodies_plain_or_base64_skip_unknown_lines() {
 #[test]
 fn smart_route_is_v2rayngs_white_iran() {
     let s = Server::parse(VLESS_WS_TLS).unwrap();
-    let c = client_config(&s, None, Route::Smart, LocalPorts { socks: 10808, http: 10809 });
+    let c = client_config(&s, None, Route::Smart, &[], LocalPorts { socks: 10808, http: 10809 });
     let rules = c["routing"]["rules"].as_array().unwrap();
     assert!(rules.iter().any(|r| r["domain"] == json!(["domain:ir", "geosite:category-ir"]) && r["outboundTag"] == "direct"));
     assert!(rules.iter().any(|r| r["ip"] == json!(["geoip:ir"])));
@@ -108,8 +108,28 @@ fn smart_route_is_v2rayngs_white_iran() {
     assert_eq!(c["inbounds"][1]["port"], 10809);
     assert_eq!(c["outbounds"][0]["tag"], "proxy");
 
-    let direct = client_config(&s, None, Route::Direct, LocalPorts { socks: 1, http: 2 });
+    let direct = client_config(&s, None, Route::Direct, &[], LocalPorts { socks: 1, http: 2 });
     assert_eq!(direct["routing"]["rules"][0]["outboundTag"], "direct");
+
+    // The customer's own rules come first: first match wins in Xray.
+    let mine = [CustomRule { value: "example.org".into(), action: RuleAction::Proxy }];
+    let c = client_config(&s, None, Route::Direct, &mine, LocalPorts { socks: 1, http: 2 });
+    assert_eq!(c["routing"]["rules"][0]["domain"], json!(["domain:example.org"]));
+    assert_eq!(c["routing"]["rules"][0]["outboundTag"], "proxy");
+}
+
+#[test]
+fn tun_puts_the_customers_rules_after_the_engine_and_the_apps() {
+    let mut spec = tun_spec(Route::Smart, AppRouting::default());
+    spec.rules = vec![CustomRule { value: "digikala.com".into(), action: RuleAction::Proxy }];
+    let c = tun_config(&spec, &host(true));
+    let rules = c["route"]["rules"].as_array().unwrap();
+    let mine = rules.iter().position(|r| r["domain_suffix"] == json!(["digikala.com"])).unwrap();
+    let engine = rules.iter().position(|r| r.get("process_path").is_some()).unwrap();
+    let iran = rules.iter().position(|r| r["rule_set"] == "iran").unwrap();
+    assert!(engine < mine && mine < iran, "before Smart's Iran rules, so a customer can send an Iranian site through the VPN");
+    assert_eq!(rules[mine]["outbound"], "proxy");
+    assert!(c["dns"]["rules"].as_array().unwrap().iter().any(|r| r["domain_suffix"] == json!(["digikala.com"]) && r["server"] == "remote"));
 }
 
 fn tun_spec(route: Route, apps: AppRouting) -> TunSpec {
@@ -119,6 +139,7 @@ fn tun_spec(route: Route, apps: AppRouting) -> TunSpec {
         direct: RuleLists { domain_suffix: vec!["ir".into()], ip_cidr: vec!["2.144.0.0/14".into()], ..Default::default() },
         apps,
         core_paths: vec!["/opt/GeekVPN/geekcore".into()],
+        rules: vec![],
     }
 }
 

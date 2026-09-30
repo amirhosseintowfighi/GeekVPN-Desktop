@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use geek_api::{telegram_app_link, wait_for_approval, AppUser, DeviceInfo, LinkOutcome, Session, SessionError};
+use geek_api::{telegram_app_link, wait_for_approval, ApiClient, ApiError, AppUser, DeviceInfo, LinkOutcome, Session, SessionError};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_opener::OpenerExt;
@@ -167,6 +167,26 @@ pub async fn logout(app: AppHandle, state: State<'_, AuthState>) -> Result<(), S
     Ok(())
 }
 
+/// One backend call with the session's token, its error in Persian. A
+/// session the server has ended also tells the UI, which goes back to the
+/// sign-in screen.
+pub async fn call<T, F, Fut>(app: &AppHandle, state: &AuthState, f: F) -> Result<T, String>
+where
+    F: Fn(ApiClient, String) -> Fut,
+    Fut: std::future::Future<Output = Result<T, ApiError>>,
+{
+    let api = state.session.api().clone();
+    match state.session.authorized(|t| f(api.clone(), t)).await {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            if matches!(e, SessionError::Api(ApiError::Unauthorized)) {
+                emit_changed(app, &state.session).await;
+            }
+            Err(e.user_message())
+        }
+    }
+}
+
 /// At start-up: re-read the profile, which also refreshes an old token. A
 /// session the server no longer accepts ends here, not at the first click.
 pub async fn revalidate(app: AppHandle, session: Arc<Session>) {
@@ -186,7 +206,7 @@ pub async fn revalidate(app: AppHandle, session: Arc<Session>) {
 /// The opener hands the URL to the OS and returns before the OS knows
 /// whether anything handles it, so "no Telegram installed" never comes back
 /// as an error. Hence the explicit check for a `tg:` handler first.
-fn open_telegram(app: &AppHandle, deep_link: &str) {
+pub fn open_telegram(app: &AppHandle, deep_link: &str) {
     let opener = app.opener();
     let opened = match telegram_app_link(deep_link) {
         Some(tg) if has_tg_handler() => opener.open_url(tg, None::<&str>).is_ok(),
@@ -233,7 +253,7 @@ fn has_tg_handler() -> bool {
     false
 }
 
-fn qr_svg(link: &str) -> Result<String, String> {
+pub fn qr_svg(link: &str) -> Result<String, String> {
     use qrcode::render::svg;
     let code = qrcode::QrCode::new(link.as_bytes()).map_err(|e| e.to_string())?;
     Ok(code

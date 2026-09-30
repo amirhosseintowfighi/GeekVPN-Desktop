@@ -1,0 +1,88 @@
+{
+  "categories": [
+    {
+      "categoryId": "00000000-0000-0000-0000-00000000000a",
+      "nameFa": "سرویس‌ها",
+      "icon": null,
+      "products": [
+        {
+          "productId": "00000000-0000-0000-0000-000000000064",
+          "categoryId": "00000000-0000-0000-0000-00000000000a",
+          "tier": "direct",
+          "nameFa": "مستقیم",
+          "taglineFa": "برای اسکنر کلادفلر",
+          "descriptionFa": null,
+          "featuresFa": [
+            "IP تمیز"
+          ],
+          "icon": null,
+          "badgeFa": null,
+          "isFeatured": true,
+          "plans": [
+            {
+              "planId": "00000000-0000-0000-0000-000000000001",
+              "productId": "00000000-0000-0000-0000-000000000064",
+              "nameFa": "30 روزه",
+              "planType": "volume",
+              "durationDays": 30,
+              "price": 90000,
+              "compareAtPrice": null,
+              "quotaGib": 20,
+              "dailyQuotaGib": null,
+              "deviceLimit": 2,
+              "badgeFa": null,
+              "isFeatured": false,
+              "descriptionFa": null
+            },
+            {
+              "planId": "00000000-0000-0000-0000-000000000002",
+              "productId": "00000000-0000-0000-0000-000000000064",
+              "nameFa": "30 روزه",
+              "planType": "volume",
+              "durationDays": 30,
+              "price": 150000,
+              "compareAtPrice": 180000,
+              "quotaGib": 40,
+              "dailyQuotaGib": null,
+              "deviceLimit": 2,
+              "badgeFa": "پرفروش",
+              "isFeatured": true,
+              "descriptionFa": null
+            },
+            {
+              "planId": "00000000-0000-0000-0000-000000000003",
+              "productId": "00000000-0000-0000-0000-000000000064",
+              "nameFa": "90 روزه",
+              "planType": "volume",
+              "durationDays": 90,
+              "price": 400000,
+              "compareAtPrice": null,
+              "quotaGib": null,
+              "dailyQuotaGib": null,
+              "deviceLimit": 2,
+              "badgeFa": null,
+              "isFeatured": false,
+              "descriptionFa": null
+            }
+          ]
+        },
+        {
+          "productId": "00000000-0000-0000-0000-000000000065",
+          "categoryId": "00000000-0000-0000-0000-00000000000a",
+          "tier": "tunnel",
+          "nameFa": "تونل",
+          "taglineFa": null,
+          "descriptionFa": null,
+          "featuresFa": [],
+          "icon": null,
+          "badgeFa": null,
+          "isFeatured": false,
+          "plans": []
+        }
+      ]
+    }
+  ],
+  "walletBalance": 50000,
+  "loyaltyTier": "bronze",
+  "isFirstPurchase": true
+}

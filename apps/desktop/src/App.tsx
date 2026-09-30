@@ -11,12 +11,14 @@ import { Services } from "./pages/Services";
 import { TunnelProvider } from "./lib/TunnelContext";
 import { AppShell } from "./shell/AppShell";
 import { Home } from "./pages/Home";
-import { Section } from "./pages/Section";
+import { Referral } from "./pages/Referral";
+import { Report } from "./pages/Report";
 import { Settings } from "./pages/Settings";
+import { Shop } from "./pages/Shop";
 import { Split } from "./pages/Split";
+import { Support } from "./pages/Support";
 import { Tools } from "./pages/Tools";
-
-const GUEST = "برای دیدن این بخش باید وارد حسابت شوی.";
+import { Usage } from "./pages/Usage";
 
 // Hash routing: the app is served from tauri://localhost with no server to
 // answer deep paths, so a reload on /servers must not 404.
@@ -27,10 +29,13 @@ const router = createHashRouter([
       { index: true, element: <Home /> },
       { path: "servers", element: <ServersPage /> },
       { path: "services", element: <Services /> },
-      { path: "shop", element: <Section title="فروشگاه" icon="bag" emptyTitle="فروشگاه" emptyText={GUEST} /> },
+      { path: "shop", element: <Shop /> },
       { path: "connections", element: <Connections /> },
       { path: "tools", element: <Tools /> },
-      { path: "support", element: <Section title="پشتیبانی" icon="chat" emptyTitle="تیکت‌های من" emptyText={GUEST} /> },
+      { path: "support", element: <Support /> },
+      { path: "report", element: <Report /> },
+      { path: "referral", element: <Referral /> },
+      { path: "usage", element: <Usage /> },
       { path: "account", element: <Account /> },
       { path: "settings", element: <Settings /> },
       { path: "settings/split", element: <Split /> },

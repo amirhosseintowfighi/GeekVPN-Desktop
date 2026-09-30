@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::link::Server;
+use crate::rules::{xray_rules, CustomRule};
 use crate::singbox::Upstream;
 
 /// «مسیر ترافیک», with the Android app's meaning of each choice.
@@ -29,8 +30,11 @@ pub struct LocalPorts {
 
 /// The config the tunnel runs: SOCKS and HTTP on loopback, the server as
 /// outbound `proxy`, `direct` and `block` beside it, and `route`'s rules.
-/// `address_override` is the scanner's clean IP for this server, if any.
-pub fn client_config(server: &Server, address_override: Option<&str>, route: Route, ports: LocalPorts) -> Value {
+/// `address_override` is the scanner's clean IP for this server, if any;
+/// `custom` are the customer's own rules, which win over the route's.
+pub fn client_config(server: &Server, address_override: Option<&str>, route: Route, custom: &[CustomRule], ports: LocalPorts) -> Value {
+    let mut rules = xray_rules(custom);
+    rules.extend(route_rules(route).as_array().cloned().unwrap_or_default());
     let sniffing = json!({ "enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true });
     json!({
         "log": { "loglevel": "warning" },
@@ -49,7 +53,7 @@ pub fn client_config(server: &Server, address_override: Option<&str>, route: Rou
             // AsIs: domains are matched by name (sniffed), never resolved
             // locally, so choosing a route cannot leak a DNS query.
             "domainStrategy": "AsIs",
-            "rules": rules(route),
+            "rules": rules,
         },
         // Byte counters for the live speed; read by geekcore's core.traffic.
         "stats": {},
@@ -85,7 +89,7 @@ pub fn delay_config(server: &Server, address_override: Option<&str>) -> Value {
     })
 }
 
-fn rules(route: Route) -> Value {
+fn route_rules(route: Route) -> Value {
     let lan = [
         json!({ "type": "field", "outboundTag": "direct", "ip": ["geoip:private"] }),
         json!({ "type": "field", "outboundTag": "direct", "domain": ["geosite:private"] }),
