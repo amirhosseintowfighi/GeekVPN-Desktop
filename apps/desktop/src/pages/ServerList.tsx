@@ -1,8 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { Icon } from "../design-system/Icon";
-import { CountryBadge, PingBars, SearchField, Switch } from "../design-system/controls";
+import { CountryBadge, PingBars, SearchField, Segmented, Switch } from "../design-system/controls";
+import { Card, CardTitle } from "../design-system/layout";
+import { faDigits } from "../lib/fa";
 import { countryCode, plainName } from "../lib/format";
-import type { ServerView } from "../lib/servers";
+import { inTauri } from "../lib/platform";
+import { scanner, type Failover, type ScanView, type ServerView } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 
 /** Filter chips: all, starred, then one per source. */
@@ -200,7 +204,8 @@ export function ServersPage() {
         ))}
       </div>
       {error && <span className="text-[13px]">{error}</span>}
-      <section className="glass-milk flex min-h-0 flex-1 flex-col overflow-hidden rounded-[26px]">
+      <div className="flex min-h-0 flex-1 gap-4">
+      <section className="glass-milk flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[26px]">
         <div className="grid grid-cols-[44px_minmax(0,1.6fr)_minmax(0,1.3fr)_110px_120px_44px] gap-2.5 border-b border-hair px-4 py-3 text-xs font-bold text-ink-2">
           <span />
           <span>سرور</span>
@@ -250,6 +255,74 @@ export function ServersPage() {
           })}
         </div>
       </section>
+      <div className="flex w-[300px] shrink-0 flex-col gap-4">
+        <AutoCard />
+        <OptimizerCard />
+      </div>
+      </div>
     </div>
+  );
+}
+
+const FAILOVER = [
+  { value: "off", label: "هرگز" },
+  { value: "lost", label: "قطعی" },
+  { value: "1000", label: "۱ ث" },
+  { value: "2000", label: "۲ ث" },
+  { value: "3000", label: "۳ ث" },
+] as const satisfies readonly { value: Failover; label: string }[];
+
+/** «انتخاب خودکار»: smart connect, and failover while connected. */
+function AutoCard() {
+  const { view, set } = useTunnel();
+  const auto = view?.autoSelect ?? true;
+  return (
+    <Card>
+      <CardTitle title="انتخاب خودکار" subtitle="اتصال هوشمند و failover" />
+      <div className="flex items-center gap-2.5 rounded-[14px] bg-soft-button px-3 py-2.5">
+        <span className="flex-1 text-[13px] font-bold">سرور: خودکار</span>
+        <Switch label="سرور خودکار" checked={auto} onChange={(v) => void set({ autoSelect: v })} />
+      </div>
+      <span className="text-xs font-bold text-ink-2">جابه‌جایی وقتی تأخیر بیشتر شد از</span>
+      <div className={auto ? "" : "pointer-events-none opacity-55"}>
+        <Segmented label="آستانه‌ی failover" options={FAILOVER} value={view?.failover ?? "2000"} onChange={(f) => void set({ failover: f })} height={38} />
+      </div>
+      <span className="text-xs leading-[1.8] text-ink-2">
+        {auto ? "دو اندازه‌گیری بد پشت سر هم = رفتن به سرور بهتر، بدون قطع تونل." : "با انتخاب دستی سرور، failover خاموش است."}
+      </span>
+    </Card>
+  );
+}
+
+/** The clean-IP scanner at a glance, for the selected server. */
+function OptimizerCard() {
+  const { view } = useTunnel();
+  const [scan, setScan] = useState<ScanView | null>(null);
+  useEffect(() => {
+    if (inTauri) void scanner.state().then(setScan, () => {});
+  }, [view?.selected]);
+  if (!scan || scan.candidates.length === 0) return null;
+  const best = scan.results[0];
+  return (
+    <Card>
+      <CardTitle title="بهینه‌ساز کلادفلر" subtitle="برای سرویس‌های مستقیم پشت CDN" />
+      <div className="flex gap-2.5">
+        <div className="flex flex-1 flex-col gap-0.5 rounded-[14px] bg-soft-button p-2.5">
+          <span className="text-[11px] text-ink-2">IP تمیز این شبکه</span>
+          <span className="font-num text-xl font-bold">{faDigits(scan.results.length)}</span>
+        </div>
+        <div className="flex flex-1 flex-col gap-0.5 rounded-[14px] bg-soft-button p-2.5">
+          <span className="text-[11px] text-ink-2">بهترین</span>
+          <span dir="ltr" className="text-right font-num text-xl font-bold">
+            {best ? `${best.latencyMs}ms` : "—"}
+          </span>
+        </div>
+      </div>
+      <span className="text-xs text-ink-2">شبکه: {scan.network.label}</span>
+      <Link to="/tools" className="flex h-11 items-center justify-center gap-2 rounded-[14px] bg-action text-sm font-bold text-on-action no-underline">
+        <Icon name="radar" size={18} />
+        {scan.results.length ? "اسکن دوباره" : "اسکن IP تمیز"}
+      </Link>
+    </Card>
   );
 }

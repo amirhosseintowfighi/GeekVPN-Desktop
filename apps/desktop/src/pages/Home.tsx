@@ -93,6 +93,12 @@ export function Home() {
   if (on) {
     title = elapsed(state.sinceMs, now);
     subtitle = "برای قطع اتصال، روی عینک بزن";
+  } else if (connecting && state.stage === "findingIp") {
+    title = "پیدا کردن IP تمیز…";
+    subtitle = "این شبکه هنوز IP تمیز ندارد؛ یک اسکن کوتاه (تا ۱۵ ثانیه)";
+  } else if (connecting && state.stage === "testing") {
+    title = "تست سرورها…";
+    subtitle = "سریع‌ترین سرور و IP برای این شبکه";
   } else if (connecting) {
     title = state.of > 1 ? `تلاش ${faDigits(state.attempt)} از ${faDigits(state.of)}` : "در حال اتصال…";
     subtitle = "برای لغو، دوباره روی عینک بزن";

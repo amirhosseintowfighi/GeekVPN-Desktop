@@ -247,7 +247,7 @@ pub fn check_expiry(app: &AppHandle, data: &mut Persisted) -> bool {
     changed
 }
 
-fn notify(app: &AppHandle, title: &str, body: &str) {
+pub fn notify(app: &AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
@@ -256,7 +256,7 @@ fn now_ms() -> u64 {
 }
 
 /// A server name without its flag emoji (notifications show them badly).
-fn plain(name: &str) -> String {
+pub fn plain(name: &str) -> String {
     name.chars().filter(|c| !('\u{1F1E6}'..='\u{1F1FF}').contains(c)).collect::<String>().trim().to_string()
 }
 

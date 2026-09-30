@@ -19,7 +19,7 @@ use geek_ipc::{ErrorCode, Event, Hello, HelperClient, IpcError, KillSwitch, Requ
 use geek_netplat::{apply_system_proxy, restore_system_proxy, ProxySpec, Snapshot};
 use serde::Serialize;
 use serde_json::json;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::store::Mode;
@@ -54,7 +54,7 @@ pub struct ConnectOptions {
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "status")]
 pub enum TunnelState {
     Off,
-    Connecting { server_id: String, attempt: u32, of: u32 },
+    Connecting { server_id: String, attempt: u32, of: u32, stage: Stage },
     On {
         server_id: String,
         server_name: String,
@@ -74,6 +74,29 @@ pub enum TunnelState {
         /// «قطع» is what opens it.
         blocking: bool,
     },
+}
+
+/// What a connect is doing, for Home's progress (smart connect's stages).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Stage {
+    /// A short clean-IP scan: this network has no fresh results.
+    FindingIp,
+    /// The real-delay test over the servers (and clean addresses).
+    Testing,
+    Connecting,
+}
+
+/// The running connection, for failover to swap its server in place: the
+/// same local ports (or TUN upstream), so the system proxy and sing-box
+/// never notice.
+#[derive(Clone)]
+struct Live {
+    mode: Mode,
+    route: Route,
+    ports: LocalPorts,
+    upstream: Upstream,
+    config: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -99,6 +122,7 @@ pub struct Tunnel {
     iran: OnceCell<RuleLists>,
     /// Bytes up and down of the running connection, for the summary after it.
     totals: std::sync::Mutex<(i64, i64)>,
+    live: Mutex<Option<Live>>,
 }
 
 impl Tunnel {
@@ -114,6 +138,7 @@ impl Tunnel {
             tun: Mutex::new(None),
             iran: OnceCell::new(),
             totals: std::sync::Mutex::new((0, 0)),
+            live: Mutex::new(None),
         }
     }
 
@@ -169,8 +194,15 @@ impl Tunnel {
 
     /// Tries `candidates` in order until one carries traffic; at most three,
     /// as the Android app does before telling the customer.
-    pub async fn connect(self: &Arc<Self>, app: &AppHandle, candidates: Vec<Server>, opts: ConnectOptions) -> Result<(), String> {
-        let tries: Vec<Server> = candidates.into_iter().take(3).collect();
+    /// Smart connect's stages before a server is tried.
+    pub async fn stage(&self, app: &AppHandle, stage: Stage) {
+        self.set(app, TunnelState::Connecting { server_id: String::new(), attempt: 0, of: 0, stage }).await;
+    }
+
+    /// `candidates` are servers with the clean address each uses on this
+    /// network, if any.
+    pub async fn connect(self: &Arc<Self>, app: &AppHandle, candidates: Vec<(Server, Option<String>)>, opts: ConnectOptions) -> Result<(), String> {
+        let tries: Vec<(Server, Option<String>)> = candidates.into_iter().take(3).collect();
         if tries.is_empty() {
             return Err(self.fail(app, "سروری برای اتصال نیست. اول یک سرویس یا لینک اضافه کن.".into(), false).await);
         }
@@ -194,12 +226,13 @@ impl Tunnel {
         };
         let of = tries.len() as u32;
         let mut last = String::new();
-        for (i, server) in tries.iter().enumerate() {
-            self.set(app, TunnelState::Connecting { server_id: server.id.clone(), attempt: i as u32 + 1, of }).await;
+        for (i, (server, over)) in tries.iter().enumerate() {
+            self.set(app, TunnelState::Connecting { server_id: server.id.clone(), attempt: i as u32 + 1, of, stage: Stage::Connecting }).await;
             let upstream = Upstream { port: free_port(), username: token(), password: token() };
+            let ports = local_ports();
             let config = match opts.mode {
-                Mode::Proxy => client_config(server, None, opts.route, local_ports()),
-                Mode::Tun => tun_upstream_config(server, None, &upstream),
+                Mode::Proxy => client_config(server, over.as_deref(), opts.route, ports),
+                Mode::Tun => tun_upstream_config(server, over.as_deref(), &upstream),
             };
             match self.try_one(&core, server, &config).await {
                 Ok(delay) => {
@@ -224,6 +257,7 @@ impl Tunnel {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default();
+                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, ports, upstream: upstream.clone(), config: config.clone() });
                     let port = |name: &str| config["inbounds"].as_array().into_iter().flatten().find(|i| i["tag"] == name).and_then(|i| i["port"].as_u64());
                     self.set(
                         app,
@@ -241,6 +275,7 @@ impl Tunnel {
                     )
                     .await;
                     self.clone().watch(app.clone(), core.clone(), helper.clone(), kill_switch);
+                    self.clone().monitor(app.clone(), core.clone(), since_ms);
                     return Ok(());
                 }
                 Err(e) => last = e,
@@ -365,6 +400,7 @@ impl Tunnel {
     }
 
     pub async fn disconnect(&self, app: &AppHandle) {
+        self.live.lock().await.take();
         self.release_system_proxy().await;
         self.stop_tun(false).await;
         if let Some(core) = self.core.lock().await.as_ref() {
@@ -453,6 +489,85 @@ impl Tunnel {
         });
     }
 
+    /// Failover: the running connection moves to `server` in place, on the
+    /// same local ports (or TUN upstream), so neither the system proxy nor
+    /// sing-box sees a change. If the new server does not carry traffic,
+    /// the old config goes back.
+    pub async fn switch(&self, app: &AppHandle, server: &Server, over: Option<&str>) -> Result<i64, String> {
+        let Some(live) = self.live.lock().await.clone() else { return Err("not connected".into()) };
+        let core = self.core().await?;
+        let config = match live.mode {
+            Mode::Proxy => client_config(server, over, live.route, live.ports),
+            Mode::Tun => tun_upstream_config(server, over, &live.upstream),
+        };
+        match self.try_one(&core, server, &config).await {
+            Ok(delay) => {
+                *self.live.lock().await = Some(Live { config, ..live });
+                let mut state = self.state.lock().await;
+                // The connection goes on (and its timer with it); only the
+                // server changes.
+                if let TunnelState::On { server_id, server_name, delay_ms, .. } = &mut *state {
+                    *server_id = server.id.clone();
+                    server_name.clone_from(&server.name);
+                    *delay_ms = delay;
+                    let s = state.clone();
+                    drop(state);
+                    let _ = app.emit(STATE_EVENT, s);
+                }
+                Ok(delay)
+            }
+            Err(e) => {
+                let _ = core.call("core.start", json!({ "config": live.config }), Duration::from_secs(15)).await;
+                Err(e)
+            }
+        }
+    }
+
+    /// While connected: the running connection's real delay every half
+    /// minute (after twenty seconds to settle); when it turns bad by the
+    /// failover threshold, the servers are retested and the connection
+    /// moves to the best one (the Android app's `FailoverMonitor`).
+    fn monitor(self: Arc<Self>, app: AppHandle, core: Arc<CoreProcess>, since: u64) {
+        tauri::async_runtime::spawn(async move {
+            let mut threshold = geek_config::FailoverThreshold::Off;
+            let mut policy = geek_config::FailoverPolicy::new(threshold);
+            tokio::time::sleep(Duration::from_secs(20)).await;
+            loop {
+                let still = matches!(&*self.state.lock().await, TunnelState::On { .. }) && self.since().await == Some(since);
+                if !still || !core.is_alive() {
+                    return;
+                }
+                let wanted = {
+                    let s = app.state::<crate::servers::ServersState>();
+                    let store = s.store.lock().await;
+                    if store.data.auto_select { store.data.failover } else { geek_config::FailoverThreshold::Off }
+                };
+                if wanted != threshold {
+                    threshold = wanted;
+                    policy = geek_config::FailoverPolicy::new(threshold);
+                }
+                if threshold != geek_config::FailoverThreshold::Off {
+                    let ms = match core.call("core.delay", json!({ "url": probe_url() }), Duration::from_secs(15)).await {
+                        Ok(v) => v["ms"].as_i64().unwrap_or(-1),
+                        Err(_) => -1,
+                    };
+                    if policy.on_check(ms, now_ms() as i64) {
+                        crate::servers::failover(&app).await;
+                        policy.on_failover(now_ms() as i64);
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
+    }
+
+    async fn since(&self) -> Option<u64> {
+        match &*self.state.lock().await {
+            TunnelState::On { since_ms, .. } => Some(*since_ms),
+            _ => None,
+        }
+    }
+
     /// Quitting the app: leave the machine as it was (a strict kill switch
     /// excepted: holding is its whole point).
     pub async fn shutdown(&self) {
@@ -479,6 +594,10 @@ pub fn helper_message(e: &IpcError) -> String {
             ErrorCode::Internal => format!("سرویس GeekVPN خطا داد: {}", h.detail),
         },
     }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default()
 }
 
 fn free_port() -> u16 {

@@ -86,7 +86,9 @@ impl CoreProcess {
         let stderr = child.stderr.take().ok_or_else(|| CoreError::Spawn("no stderr".into()))?;
 
         let pending: Pending = Arc::default();
-        let (events, _) = broadcast::channel(256);
+        // A scan reports every address it tries; the app reads them as they come,
+        // and a slow reader skips ahead rather than losing the finish.
+        let (events, _) = broadcast::channel(1024);
         let tail: Arc<Mutex<VecDeque<String>>> = Arc::default();
         let alive = Arc::new(std::sync::atomic::AtomicBool::new(true));
 

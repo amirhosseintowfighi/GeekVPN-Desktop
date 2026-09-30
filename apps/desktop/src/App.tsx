@@ -14,6 +14,7 @@ import { Home } from "./pages/Home";
 import { Section } from "./pages/Section";
 import { Settings } from "./pages/Settings";
 import { Split } from "./pages/Split";
+import { Tools } from "./pages/Tools";
 
 const GUEST = "برای دیدن این بخش باید وارد حسابت شوی.";
 
@@ -28,17 +29,7 @@ const router = createHashRouter([
       { path: "services", element: <Services /> },
       { path: "shop", element: <Section title="فروشگاه" icon="bag" emptyTitle="فروشگاه" emptyText={GUEST} /> },
       { path: "connections", element: <Connections /> },
-      {
-        path: "tools",
-        element: (
-          <Section
-            title="ابزارها"
-            icon="tool"
-            emptyTitle="اسکنر IP تمیز و تست سرعت"
-            emptyText="اسکنر روی سرویس‌های مستقیم پشت کلادفلر کار می‌کند؛ اول یک سرویس اضافه کن."
-          />
-        ),
-      },
+      { path: "tools", element: <Tools /> },
       { path: "support", element: <Section title="پشتیبانی" icon="chat" emptyTitle="تیکت‌های من" emptyText={GUEST} /> },
       { path: "account", element: <Account /> },
       { path: "settings", element: <Settings /> },

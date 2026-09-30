@@ -1,9 +1,10 @@
 //! Servers and the connection, as commands the UI may call.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use geek_config::{delay_config, parse_subscription, AppRouting, Route, Server};
+use geek_config::{delay_config, parse_subscription, AppRouting, FailoverThreshold, Route, Server};
 use geek_ipc::KillSwitch;
 use serde::Serialize;
 use serde_json::json;
@@ -11,8 +12,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::auth::AuthState;
-use crate::store::{Mode, ServerView, Source, SourceKind, Store};
-use crate::tunnel::{probe_url, ConnectOptions, Tunnel, TunnelState};
+use crate::store::{IpOverride, Mode, ServerView, Source, SourceKind, Store};
+use crate::tunnel::{probe_url, ConnectOptions, Stage, Tunnel, TunnelState};
 
 pub const CHANGED: &str = "servers://changed";
 pub const DELAY: &str = "servers://delay";
@@ -35,6 +36,7 @@ pub struct ServersView {
     close_to_tray: bool,
     shortcut: bool,
     expiry_alert: bool,
+    failover: FailoverThreshold,
     mode: Mode,
     kill_switch: bool,
     strict: bool,
@@ -54,6 +56,7 @@ fn view(store: &Store) -> ServersView {
         close_to_tray: store.data.close_to_tray,
         shortcut: store.data.shortcut,
         expiry_alert: store.data.expiry_alert,
+        failover: store.data.failover,
         mode: store.data.mode,
         kill_switch: store.data.kill_switch,
         strict: store.data.strict,
@@ -255,6 +258,7 @@ pub struct Settings {
     close_to_tray: Option<bool>,
     shortcut: Option<bool>,
     expiry_alert: Option<bool>,
+    failover: Option<FailoverThreshold>,
 }
 
 #[tauri::command]
@@ -274,6 +278,7 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
         close_to_tray,
         shortcut,
         expiry_alert,
+        failover,
     } = settings;
     {
         let mut store = state.store.lock().await;
@@ -326,6 +331,9 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
                 *slot = v;
             }
         }
+        if let Some(f) = failover {
+            store.data.failover = f;
+        }
         crate::desktop::apply(&app, &store.data);
     }
     changed(&app, &state).await
@@ -333,34 +341,93 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
 
 /// The real-delay test over every server, eight at a time. Each result is
 /// emitted as it lands, so the list fills in instead of freezing.
+///
+/// Servers the clean-IP scanner applies to are also tested on each of the
+/// freshest clean addresses found on this network (three at most), and are
+/// left on whichever answered fastest, their own address included: the
+/// Android app's smart-connect ranking.
 #[tauri::command]
 pub async fn servers_test(app: AppHandle, state: State<'_, ServersState>) -> Result<ServersView, String> {
-    let servers: Vec<Server> = state.store.lock().await.servers().into_iter().map(|v| v.server).collect();
-    if servers.is_empty() {
+    let network = tauri::async_runtime::spawn_blocking(crate::scan::current_network).await.map_err(|e| e.to_string())?.key;
+    let now = now() * 1000;
+    let (views, scannable, ips) = {
+        let store = state.store.lock().await;
+        let views = store.servers();
+        let scannable: Vec<ServerView> = views
+            .iter()
+            .filter(|v| {
+                store.scan_target(v).is_some_and(|t| store.data.scan.verdicts.get(&t.verdict_key()).is_some_and(|d| d.behind))
+            })
+            .cloned()
+            .collect();
+        let mut ips: Vec<String> = scannable.iter().flat_map(|v| store.fresh_ips(v, &network, now)).collect();
+        ips.dedup();
+        ips.truncate(3);
+        (views, scannable, ips)
+    };
+    if views.is_empty() {
         return changed(&app, &state).await;
     }
     let core = state.tunnel.core().await?;
     let mut events = core.events();
     let relay = app.clone();
     let forward = tauri::async_runtime::spawn(async move {
-        while let Ok(ev) = events.recv().await {
-            if ev.event == "test.result" {
+        loop {
+            let ev = match events.recv().await {
+                Ok(ev) => ev,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(_) => break,
+            };
+            // Clean-address rounds ("id@ip") are not a server's own result.
+            if ev.event == "test.result" && !ev.data["id"].as_str().unwrap_or("").contains('@') {
                 let _ = relay.emit(DELAY, ev.data);
             }
         }
     });
-    let items: Vec<_> = servers.iter().map(|s| json!({ "id": s.id, "config": delay_config(s, None) })).collect();
+    // Round 0: every server on its own address.
+    let mut items: Vec<_> = views.iter().map(|v| json!({ "id": v.server.id, "config": delay_config(&v.server, None) })).collect();
+    for ip in &ips {
+        for v in &scannable {
+            items.push(json!({ "id": format!("{}@{ip}", v.server.id), "config": delay_config(&v.server, Some(ip)) }));
+        }
+    }
     let result = core
-        .call("test.delay", json!({ "items": items, "url": probe_url(), "concurrency": 8 }), Duration::from_secs(120))
+        .call("test.delay", json!({ "items": items, "url": probe_url(), "concurrency": 8 }), Duration::from_secs(180))
         .await;
     forward.abort();
     let result = result.map_err(|e| crate::tunnel::core_message(&e))?;
+    let measured: HashMap<String, i64> = result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|r| Some((r["id"].as_str()?.to_string(), r["ms"].as_i64()?)))
+        .collect();
     {
         let mut store = state.store.lock().await;
-        for r in result.as_array().into_iter().flatten() {
-            if let (Some(id), Some(ms)) = (r["id"].as_str(), r["ms"].as_i64()) {
-                store.data.delays.insert(id.to_string(), ms);
+        for v in &views {
+            let own = measured.get(&v.server.id).copied().unwrap_or(-1);
+            let mut best = (own, None::<&String>);
+            if scannable.iter().any(|s| s.server.id == v.server.id) {
+                for ip in &ips {
+                    let ms = measured.get(&format!("{}@{ip}", v.server.id)).copied().unwrap_or(-1);
+                    if ms > 0 && (best.0 <= 0 || ms < best.0) {
+                        best = (ms, Some(ip));
+                    }
+                }
+                let key = Store::override_key(v, &network);
+                match best.1 {
+                    Some(ip) => {
+                        store.data.scan.overrides.insert(key, IpOverride { ip: ip.clone(), applied_at: now, latency_ms: best.0 });
+                    }
+                    None if own > 0 => {
+                        store.data.scan.overrides.remove(&key);
+                    }
+                    // Nothing answered at all: leave things as they were.
+                    None => {}
+                }
             }
+            store.data.delays.insert(v.server.id.clone(), best.0);
+            let _ = app.emit(DELAY, json!({ "id": v.server.id, "ms": best.0 }));
         }
     }
     changed(&app, &state).await
@@ -381,29 +448,52 @@ pub async fn tunnel_connect(app: AppHandle) -> Result<(), String> {
 /// The same from the tray, the shortcut and auto-connect.
 pub async fn connect(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<ServersState>();
-    let (auto, needs_test) = {
+    let network = tauri::async_runtime::spawn_blocking(crate::scan::current_network).await.map_err(|e| e.to_string())?.key;
+    let (auto, needs_test, scan_first) = {
         let store = state.store.lock().await;
-        (store.data.auto_select, store.data.auto_select && store.fastest().is_empty())
+        let auto = store.data.auto_select;
+        // Smart connect: a CDN-fronted service with no fresh clean addresses
+        // on this network gets a short scan first.
+        let scannable: Vec<ServerView> = store
+            .servers()
+            .into_iter()
+            .filter(|v| store.scan_target(v).is_some_and(|t| store.data.scan.verdicts.get(&t.verdict_key()).is_some_and(|d| d.behind)))
+            .collect();
+        let fresh = scannable.iter().any(|v| !store.fresh_ips(v, &network, now() * 1000).is_empty());
+        let scan_first = (auto && !scannable.is_empty() && !fresh).then(|| scannable[0].server.id.clone());
+        (auto, auto && (store.fastest().is_empty() || scan_first.is_some()), scan_first)
     };
+    if let Some(id) = scan_first {
+        state.tunnel.stage(app, Stage::FindingIp).await;
+        let _ = crate::scan::run_scan(app, &id, false, 3, Some(Duration::from_secs(15))).await;
+    }
     if needs_test {
+        state.tunnel.stage(app, Stage::Testing).await;
         servers_test(app.clone(), state.clone()).await?;
     }
     let (candidates, opts) = {
         let store = state.store.lock().await;
-        let chosen = store.data.selected.as_deref().and_then(|id| store.find(id));
-        let list = match (auto, chosen) {
-            (false, Some(s)) => vec![s],
+        let chosen = store.data.selected.as_deref().and_then(|id| store.find_view(id));
+        let list: Vec<ServerView> = match (auto, chosen) {
+            (false, Some(v)) => vec![v],
             (false, None) | (true, _) => {
                 let fast = store.fastest();
                 if fast.is_empty() {
                     // Nothing answered the test: try the list as it stands,
                     // the probe URL itself may be what is blocked.
-                    store.servers().into_iter().map(|v| v.server).collect()
+                    store.servers()
                 } else {
                     fast
                 }
             }
         };
+        let list = list
+            .into_iter()
+            .map(|v| {
+                let over = store.address_override(&v, &network);
+                (v.server, over)
+            })
+            .collect::<Vec<_>>();
         let d = &store.data;
         let opts = ConnectOptions {
             route: d.route,
@@ -421,6 +511,39 @@ pub async fn connect(app: &AppHandle) -> Result<(), String> {
     }
     let _ = state.store.lock().await.save();
     Ok(())
+}
+
+/// The failover monitor found the running connection bad: retest, and move
+/// to the fastest server if it is not the one in use. Nothing answering
+/// means the network itself is the likely problem: stay put.
+pub async fn failover(app: &AppHandle) {
+    let state = app.state::<ServersState>();
+    let current = match &*state.tunnel.state.lock().await {
+        TunnelState::On { server_id, .. } => server_id.clone(),
+        _ => return,
+    };
+    if servers_test(app.clone(), state.clone()).await.is_err() {
+        return;
+    }
+    let network = tauri::async_runtime::spawn_blocking(crate::scan::current_network).await.map(|n| n.key).unwrap_or_default();
+    let best = {
+        let store = state.store.lock().await;
+        store.fastest().into_iter().next().map(|v| {
+            let over = store.address_override(&v, &network);
+            (v.server, over)
+        })
+    };
+    let Some((server, over)) = best else { return };
+    if server.id == current {
+        return;
+    }
+    if state.tunnel.switch(app, &server, over.as_deref()).await.is_ok() {
+        let mut store = state.store.lock().await;
+        store.data.selected = Some(server.id.clone());
+        let _ = store.save();
+        drop(store);
+        crate::desktop::notify(app, "سرور عوض شد", &format!("اتصال کند شده بود؛ به {} منتقل شد.", crate::desktop::plain(&server.name)));
+    }
 }
 
 #[tauri::command]
