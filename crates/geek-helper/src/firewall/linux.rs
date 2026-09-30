@@ -81,13 +81,16 @@ mod tests {
         assert!(lan.contains("ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4 } accept"));
         // nft itself checks the syntax, when it is installed: -c only
         // parses, nothing is applied.
-        if let Ok(mut c) = Command::new("nft").args(["-c", "-f", "-"]).stdin(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+        let nft = Command::new("nft").args(["-c", "-f", "-"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
+        if let Ok(mut c) = nft {
             c.stdin.take().unwrap().write_all(lan.as_bytes()).unwrap();
             let out = c.wait_with_output().unwrap();
-            let err = String::from_utf8_lossy(&out.stderr);
+            // Older nft (Ubuntu 22.04's) reports on stdout.
+            let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
             // Without CAP_NET_ADMIN nft cannot even check; that is not a
-            // syntax error.
-            assert!(out.status.success() || err.contains("Operation not permitted"), "{err}");
+            // syntax error, and a syntax error never reads like this.
+            let no_rights = said.contains("Operation not permitted") || said.contains("Permission denied");
+            assert!(out.status.success() || no_rights, "nft -c: {:?} {said}", out.status);
         }
     }
 }
