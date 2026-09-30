@@ -1,0 +1,27 @@
+{
+  "planId": "00000000-0000-0000-0000-000000000002",
+  "productId": "00000000-0000-0000-0000-000000000064",
+  "basePrice": 180000,
+  "total": 150000,
+  "totalDiscount": 30000,
+  "discountPercent": 16,
+  "cashback": 1500,
+  "lines": [
+    {
+      "kind": "base",
+      "label": "قیمت پایه",
+      "amount": 180000,
+      "isDeduction": false
+    },
+    {
+      "kind": "campaign",
+      "label": "تخفیف",
+      "amount": 30000,
+      "isDeduction": true
+    }
+  ],
+  "compareAtPrice": 180000,
+  "campaignLabel": null,
+  "couponCode": null,
+  "flashSaleEndsIn": null
+}

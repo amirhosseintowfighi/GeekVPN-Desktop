@@ -2,9 +2,12 @@ import { NavLink } from "react-router";
 import { Icon } from "../design-system/Icon";
 import { Logo } from "../design-system/Logo";
 import { NAV } from "../lib/nav";
+import { faDigits } from "../lib/fa";
+import { useUnread } from "../lib/useUnread";
 
 /** The right-hand rail (Desktop-Home). */
 export function Sidebar() {
+  const unread = useUnread();
   return (
     <aside
       aria-label="ناوبری اصلی"
@@ -24,13 +27,21 @@ export function Sidebar() {
             {({ isActive }) => (
               <>
                 <span
-                  className={`flex items-center justify-center transition-all ${
+                  className={`relative flex items-center justify-center transition-all ${
                     isActive
                       ? "glass-milk h-11 w-11 rounded-[14px]"
                       : "h-10 w-10 rounded-[13px] bg-white/8 text-white hover:bg-white/15"
                   }`}
                 >
                   <Icon name={item.icon} size={21} />
+                  {item.path === "/support" && unread > 0 && (
+                    <span
+                      aria-label={`${faDigits(unread)} پیام خوانده‌نشده`}
+                      className="absolute -left-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-bad px-1 text-[10px] font-extrabold text-white"
+                    >
+                      {faDigits(unread)}
+                    </span>
+                  )}
                 </span>
                 <span className={`text-[10px] text-white ${isActive ? "font-extrabold" : "font-medium opacity-80"}`}>{item.label}</span>
               </>

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use geek_config::{client_config, iran_rules, tun_upstream_config, AppRouting, LocalPorts, Route, RuleLists, Server, TunSpec, Upstream};
+use geek_config::{client_config, iran_rules, tun_upstream_config, AppRouting, CustomRule, LocalPorts, Route, RuleLists, Server, TunSpec, Upstream};
 use geek_core::{CoreError, CoreProcess};
 use geek_ipc::{ErrorCode, Event, Hello, HelperClient, IpcError, KillSwitch, Request, TunInfo, PROTOCOL};
 use geek_netplat::{apply_system_proxy, restore_system_proxy, ProxySpec, Snapshot};
@@ -48,6 +48,7 @@ pub struct ConnectOptions {
     /// TUN mode only.
     pub kill_switch: Option<KillSwitch>,
     pub apps: AppRouting,
+    pub rules: Vec<CustomRule>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -94,6 +95,7 @@ pub enum Stage {
 struct Live {
     mode: Mode,
     route: Route,
+    rules: Vec<CustomRule>,
     ports: LocalPorts,
     upstream: Upstream,
     config: serde_json::Value,
@@ -123,10 +125,14 @@ pub struct Tunnel {
     /// Bytes up and down of the running connection, for the summary after it.
     totals: std::sync::Mutex<(i64, i64)>,
     live: Mutex<Option<Live>>,
+    /// «مصرف روزانه» of this computer.
+    pub usage: crate::usage::Usage,
+    /// The last failure and when (ms), for «گزارش مشکل».
+    pub last_failure: std::sync::Mutex<Option<(String, u64)>>,
 }
 
 impl Tunnel {
-    pub fn new(binary: PathBuf, geo: PathBuf, snapshot_file: PathBuf) -> Self {
+    pub fn new(binary: PathBuf, geo: PathBuf, snapshot_file: PathBuf, usage_file: PathBuf) -> Self {
         Self {
             binary,
             geo,
@@ -139,6 +145,8 @@ impl Tunnel {
             iran: OnceCell::new(),
             totals: std::sync::Mutex::new((0, 0)),
             live: Mutex::new(None),
+            usage: crate::usage::Usage::load(usage_file),
+            last_failure: std::sync::Mutex::new(None),
         }
     }
 
@@ -188,6 +196,7 @@ impl Tunnel {
     }
 
     async fn fail(&self, app: &AppHandle, message: String, blocking: bool) -> String {
+        *self.last_failure.lock().unwrap() = Some((message.clone(), now_ms()));
         self.set(app, TunnelState::Failed { message: message.clone(), blocking }).await;
         message
     }
@@ -231,7 +240,7 @@ impl Tunnel {
             let upstream = Upstream { port: free_port(), username: token(), password: token() };
             let ports = local_ports();
             let config = match opts.mode {
-                Mode::Proxy => client_config(server, over.as_deref(), opts.route, ports),
+                Mode::Proxy => client_config(server, over.as_deref(), opts.route, &opts.rules, ports),
                 Mode::Tun => tun_upstream_config(server, over.as_deref(), &upstream),
             };
             match self.try_one(&core, server, &config).await {
@@ -257,7 +266,7 @@ impl Tunnel {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default();
-                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, ports, upstream: upstream.clone(), config: config.clone() });
+                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), ports, upstream: upstream.clone(), config: config.clone() });
                     let port = |name: &str| config["inbounds"].as_array().into_iter().flatten().find(|i| i["tag"] == name).and_then(|i| i["port"].as_u64());
                     self.set(
                         app,
@@ -321,6 +330,7 @@ impl Tunnel {
             direct,
             apps: opts.apps.clone(),
             core_paths: vec![core_path.to_string_lossy().into_owned()],
+            rules: opts.rules.clone(),
         };
         let info: TunInfo = helper
             .call(Request::TunStart { spec: Box::new(spec), kill_switch: opts.kill_switch }, Duration::from_secs(30))
@@ -400,12 +410,19 @@ impl Tunnel {
     }
 
     pub async fn disconnect(&self, app: &AppHandle) {
-        self.live.lock().await.take();
+        let was_live = self.live.lock().await.take().is_some();
         self.release_system_proxy().await;
         self.stop_tun(false).await;
         if let Some(core) = self.core.lock().await.as_ref() {
+            // The last second's bytes, before the counters go with the engine.
+            if was_live {
+                if let Ok(t) = core.call("core.traffic", json!({}), Duration::from_secs(2)).await {
+                    self.usage.sample(t["up"].as_i64().unwrap_or(0) + t["down"].as_i64().unwrap_or(0));
+                }
+            }
             let _ = core.call("core.stop", json!({}), Duration::from_secs(5)).await;
         }
+        self.usage.flush();
         self.set(app, TunnelState::Off).await;
     }
 
@@ -415,6 +432,7 @@ impl Tunnel {
     fn watch(self: Arc<Self>, app: AppHandle, core: Arc<CoreProcess>, helper: Option<Arc<HelperClient>>, kill_switch: bool) {
         let mut events = core.events();
         let mut helper_events = helper.as_ref().map(|h| h.events());
+        self.usage.begin();
         tauri::async_runtime::spawn(async move {
             let mut last: Option<(Instant, i64, i64)> = None;
             let mut tick = tokio::time::interval(Duration::from_secs(1));
@@ -439,6 +457,7 @@ impl Tunnel {
                                 self.stop_tun(false).await;
                                 format!("هسته‌ی اتصال بسته شد و اتصال قطع شد. تنظیمات شبکه به حالت قبل برگشت. {reason}")
                             };
+                            self.usage.flush();
                             self.fail(&app, message, kill_switch).await;
                             return;
                         }
@@ -462,16 +481,19 @@ impl Tunnel {
                             (true, false) => "حالت TUN از کار افتاد و اتصال قطع شد.",
                             _ => "سرویس GeekVPN بسته شد و اتصال قطع شد.",
                         };
+                        self.usage.flush();
                         self.fail(&app, text.into(), blocking).await;
                         return;
                     }
                     _ = tick.tick() => {
                         if !matches!(*self.state.lock().await, TunnelState::On { .. }) {
+                            self.usage.flush();
                             return;
                         }
                         let Ok(t) = core.call("core.traffic", json!({}), Duration::from_secs(3)).await else { continue };
                         let (up, down) = (t["up"].as_i64().unwrap_or(0), t["down"].as_i64().unwrap_or(0));
                         *self.totals.lock().unwrap() = (up, down);
+                        self.usage.sample(up + down);
                         let now = Instant::now();
                         if let Some((at, up0, down0)) = last {
                             let secs = now.duration_since(at).as_secs_f64().max(0.001);
@@ -497,7 +519,7 @@ impl Tunnel {
         let Some(live) = self.live.lock().await.clone() else { return Err("not connected".into()) };
         let core = self.core().await?;
         let config = match live.mode {
-            Mode::Proxy => client_config(server, over, live.route, live.ports),
+            Mode::Proxy => client_config(server, over, live.route, &live.rules, live.ports),
             Mode::Tun => tun_upstream_config(server, over, &live.upstream),
         };
         match self.try_one(&core, server, &config).await {
@@ -571,6 +593,7 @@ impl Tunnel {
     /// Quitting the app: leave the machine as it was (a strict kill switch
     /// excepted: holding is its whole point).
     pub async fn shutdown(&self) {
+        self.usage.flush();
         self.release_system_proxy().await;
         self.stop_tun(true).await;
         if let Some(core) = self.core.lock().await.take() {

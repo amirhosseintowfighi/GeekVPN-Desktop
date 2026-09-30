@@ -48,6 +48,7 @@ sudo geekvpn-helper run --console               # بدون سرویس، برای
 |---|---|
 | `GEEK_ENV` | `prod` یا `staging`؛ پیش‌فرض: release ← prod، debug ← staging |
 | `GEEK_API_BASE_PROD` / `GEEK_API_BASE_STAGING` | آدرس `https://` بک‌اند. `http://127.0.0.1` فقط در build دیباگ پذیرفته می‌شود |
+| `GEEK_BOT_USERNAME` | نام کاربری ربات (بدون @) برای لینک دعوت و «ربات پشتیبانی»؛ خالی = این دو پنهان می‌شوند |
 
 ## تست end-to-end با بک‌اند واقعی
 

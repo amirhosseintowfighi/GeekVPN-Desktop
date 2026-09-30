@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "transactionId": "00000000-0000-0000-0000-000000000005",
+      "kind": "topup",
+      "amount": 100000,
+      "createdAt": "2026-09-27T10:30:00+00:00",
+      "descriptionFa": "افزایش موجودی",
+      "balanceAfter": 100000
+    }
+  ],
+  "page": 1,
+  "pageSize": 10,
+  "total": 1
+}

@@ -3,7 +3,7 @@
 //! Android app's `GEEK_API_BASE_*`.
 
 fn main() {
-    for var in ["GEEK_ENV", "GEEK_API_BASE_PROD", "GEEK_API_BASE_STAGING"] {
+    for var in ["GEEK_ENV", "GEEK_API_BASE_PROD", "GEEK_API_BASE_STAGING", "GEEK_BOT_USERNAME"] {
         println!("cargo:rerun-if-env-changed={var}");
     }
     let release = std::env::var("PROFILE").as_deref() == Ok("release");
@@ -26,5 +26,13 @@ fn main() {
     let base = if base.ends_with('/') { base } else { format!("{base}/") };
     println!("cargo:rustc-env=GEEK_API_BASE={base}");
     println!("cargo:rustc-env=GEEK_ENV={env}");
+    // The bot, for invite links and «ربات پشتیبانی»; empty hides both.
+    let bot = std::env::var("GEEK_BOT_USERNAME").unwrap_or_default();
+    let bot = bot.trim().trim_start_matches('@');
+    assert!(
+        bot.is_empty() || (5..=32).contains(&bot.len()) && bot.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+        "GEEK_BOT_USERNAME must be a Telegram username, got {bot:?}"
+    );
+    println!("cargo:rustc-env=GEEK_BOT_USERNAME={bot}");
     tauri_build::build()
 }

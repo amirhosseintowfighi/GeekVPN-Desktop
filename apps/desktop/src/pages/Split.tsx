@@ -1,12 +1,12 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
-import { Button, IconButton, SearchField, Segmented, Switch } from "../design-system/controls";
+import { Badge, Button, IconButton, SearchField, Segmented, Switch } from "../design-system/controls";
 import { Icon } from "../design-system/Icon";
 import { Card, CardTitle, PageHeader } from "../design-system/layout";
 import { errorText } from "../lib/auth";
 import { faDigits } from "../lib/fa";
 import { inTauri } from "../lib/platform";
-import { system, type AppMode, type Program } from "../lib/servers";
+import { servers, system, type AppMode, type CustomRule, type Program, type RuleAction } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 
 const APP_MODES = [
@@ -21,6 +21,75 @@ const APP_HINT: Record<AppMode, string> = {
   only: "فقط برنامه‌های این فهرست از VPN رد می‌شوند؛ بقیه مستقیم.",
 };
 
+const RULE_ACTIONS = [
+  { value: "direct", label: "مستقیم" },
+  { value: "proxy", label: "VPN" },
+  { value: "block", label: "مسدود" },
+] as const satisfies readonly { value: RuleAction; label: string }[];
+
+const RULE_TONE: Record<RuleAction, "ok" | "link" | "bad"> = { direct: "ok", proxy: "link", block: "bad" };
+
+/** «قوانین دامنه و IP»: the customer's own sites and addresses, each direct, through the VPN or blocked. */
+function Rules({ rules }: { rules: CustomRule[] }) {
+  const [value, setValue] = useState("");
+  const [action, setAction] = useState<RuleAction>("direct");
+  const [error, setError] = useState<string | null>(null);
+  const save = async (next: CustomRule[]) => {
+    setError(null);
+    try {
+      await servers.set({ rules: next });
+      return true;
+    } catch (e) {
+      setError(errorText(e));
+      return false;
+    }
+  };
+  const add = async () => {
+    if (!value.trim()) return;
+    if (await save([...rules, { value, action }])) setValue("");
+  };
+  return (
+    <>
+      <span className="text-xs leading-[1.8] text-ink-2">
+        بر مسیر هوشمند و حالت‌ها مقدم است. دامنه زیردامنه‌هایش را هم می‌گیرد؛ <span dir="ltr">full:</span> فقط خود دامنه، <span dir="ltr">keyword:</span> هر
+        دامنه‌ای که آن کلمه را دارد.
+      </span>
+      <div className="-mx-1 flex max-h-[300px] flex-col gap-1.5 overflow-y-auto px-1">
+        {rules.length === 0 && <span className="py-3 text-center text-[13px] text-ink-2">هنوز قانونی نداری.</span>}
+        {rules.map((r) => (
+          <div key={r.value} className="flex items-center gap-2.5 rounded-[14px] bg-soft-button py-2 pe-1.5 ps-3">
+            <span dir="ltr" className="min-w-0 flex-1 truncate text-right font-num text-[13px] font-bold text-ink">
+              {r.value}
+            </span>
+            <Badge tone={RULE_TONE[r.action]}>{RULE_ACTIONS.find((a) => a.value === r.action)?.label}</Badge>
+            <IconButton icon="trash" label={`حذف ${r.value}`} size={32} onClick={() => void save(rules.filter((x) => x.value !== r.value))} />
+          </div>
+        ))}
+      </div>
+      <label className="flex flex-col gap-1.5 text-xs font-bold text-ink-2">
+        افزودن قانون
+        <input
+          dir="ltr"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void add()}
+          placeholder="دامنه، IP یا CIDR"
+          className="h-11 rounded-[13px] border border-chip-border bg-chip px-3 font-num text-[13px] text-ink outline-none focus:border-link"
+        />
+      </label>
+      <Segmented label="مسیر این قانون" options={RULE_ACTIONS} value={action} onChange={setAction} height={40} />
+      {error && (
+        <span role="alert" className="text-xs text-bad">
+          {error}
+        </span>
+      )}
+      <Button icon="plus" disabled={!value.trim()} onClick={() => void add()}>
+        افزودن
+      </Button>
+    </>
+  );
+}
+
 /** The last path segment, without an .exe ending. */
 function programName(path: string): string {
   const file = path.split(/[\\/]/).pop() ?? path;
@@ -32,6 +101,7 @@ export function Split() {
   const [running, setRunning] = useState<Program[] | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [side, setSide] = useState<"rules" | "running">("rules");
 
   const apps = view?.apps ?? { mode: "off" as AppMode, paths: [] };
   const tun = view?.mode === "tun";
@@ -125,39 +195,55 @@ export function Split() {
           </div>
         </section>
 
-        <Card className="w-[360px] shrink-0">
-          <CardTitle
-            title="برنامه‌های در حال اجرا"
-            subtitle={running ? `${faDigits(running.length)} برنامه` : "در حال خواندن…"}
-            actions={<IconButton icon="refresh" label="تازه کردن فهرست" onClick={loadRunning} />}
+        <Card className="w-[360px] shrink-0 overflow-y-auto">
+          <Segmented
+            label="ستون کناری"
+            options={[
+              { value: "rules", label: "قوانین دامنه و IP" },
+              { value: "running", label: "برنامه‌های در حال اجرا" },
+            ]}
+            value={side}
+            onChange={setSide}
+            height={40}
           />
-          <SearchField id="program-search" placeholder="جستجوی برنامه" value={query} onChange={setQuery} />
-          {error && (
-            <span role="alert" className="text-xs text-bad">
-              {error}
-            </span>
+          {side === "rules" ? (
+            <Rules rules={view?.rules ?? []} />
+          ) : (
+            <>
+              <CardTitle
+                title="برنامه‌های در حال اجرا"
+                subtitle={running ? `${faDigits(running.length)} برنامه` : "در حال خواندن…"}
+                actions={<IconButton icon="refresh" label="تازه کردن فهرست" onClick={loadRunning} />}
+              />
+              <SearchField id="program-search" placeholder="جستجوی برنامه" value={query} onChange={setQuery} />
+              {error && (
+                <span role="alert" className="text-xs text-bad">
+                  {error}
+                </span>
+              )}
+              <div className="-mx-1 flex max-h-[420px] flex-col overflow-y-auto">
+                {shown.map((p) => (
+                  <button
+                    key={p.path}
+                    type="button"
+                    onClick={() => add(p.path)}
+                    className="flex items-center gap-2.5 rounded-xl px-2 py-2 text-start hover:bg-soft"
+                    title={p.path}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-[13px] font-bold text-ink">{p.name}</span>
+                      <span dir="ltr" className="truncate text-right font-num text-[11px] text-muted">
+                        {p.path}
+                      </span>
+                    </span>
+                    <span className="flex text-link">
+                      <Icon name="plus" size={18} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
-          <div className="-mx-1 flex max-h-[420px] flex-col overflow-y-auto">
-            {shown.map((p) => (
-              <button
-                key={p.path}
-                type="button"
-                onClick={() => add(p.path)}
-                className="flex items-center gap-2.5 rounded-xl px-2 py-2 text-start hover:bg-soft"
-                title={p.path}
-              >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[13px] font-bold text-ink">{p.name}</span>
-                  <span dir="ltr" className="truncate text-right font-num text-[11px] text-muted">
-                    {p.path}
-                  </span>
-                </span>
-                <span className="flex text-link">
-                  <Icon name="plus" size={18} />
-                </span>
-              </button>
-            ))}
-          </div>
         </Card>
       </div>
     </div>

@@ -31,6 +31,7 @@ geek-secrets = { path = "../../../crates/geek-secrets" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream"] }
 bytes = "1"
 futures-util = { version = "0.3", default-features = false }
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"

@@ -9,6 +9,15 @@ export type AppMode = "off" | "bypass" | "only";
 /** «Failover»: when a running connection moves to a better server. */
 export type Failover = "off" | "lost" | "1000" | "2000" | "3000";
 
+/** «قوانین دامنه و IP»: where one site or address goes. */
+export type RuleAction = "direct" | "proxy" | "block";
+
+export interface CustomRule {
+  /** `example.com` (and its subdomains), `full:…`, `keyword:…`, an IP or CIDR. */
+  value: string;
+  action: RuleAction;
+}
+
 export interface AppRouting {
   mode: AppMode;
   paths: string[];
@@ -69,6 +78,7 @@ export interface ServersView {
   strict: boolean;
   allowLan: boolean;
   apps: AppRouting;
+  rules: CustomRule[];
 }
 
 export type TunnelState =
@@ -114,6 +124,7 @@ export interface ServerSettings {
   strict?: boolean;
   allowLan?: boolean;
   apps?: AppRouting;
+  rules?: CustomRule[];
 }
 
 const EMPTY: ServersView = {
@@ -133,6 +144,7 @@ const EMPTY: ServersView = {
   strict: false,
   allowLan: true,
   apps: { mode: "off", paths: [] },
+  rules: [],
 };
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

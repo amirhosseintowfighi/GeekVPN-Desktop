@@ -67,7 +67,7 @@ function ServiceCard({ s }: { s: Extract<Source, { kind: "account" }> }) {
         </div>
       </div>
       <div className="flex gap-2 border-t-2 border-dashed border-track bg-soft-button p-3">
-        <Link to="/shop" className="flex h-11 flex-1 items-center justify-center gap-2 rounded-[14px] bg-action text-sm font-bold text-on-action no-underline">
+        <Link to={`/shop?renew=${encodeURIComponent(s.subscriptionId)}`} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-[14px] bg-action text-sm font-bold text-on-action no-underline">
           <Icon name="refresh" size={18} />
           تمدید
         </Link>

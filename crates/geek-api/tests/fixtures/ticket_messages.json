@@ -1,0 +1,22 @@
+[
+  {
+    "messageId": "00000000000000000000000000000029",
+    "ticketId": "00000000000000000000000000000028",
+    "kind": "customer",
+    "fromSupport": false,
+    "bodyFa": "روی ایرانسل وصل نمی‌شود",
+    "createdAt": "2026-09-27T10:30:00+00:00",
+    "attachmentCount": 0,
+    "isRead": true
+  },
+  {
+    "messageId": "0000000000000000000000000000002a",
+    "ticketId": "00000000000000000000000000000028",
+    "kind": "support",
+    "fromSupport": true,
+    "bodyFa": "یک اسکن بزنید.",
+    "createdAt": "2026-09-27T10:30:00+00:00",
+    "attachmentCount": 0,
+    "isRead": false
+  }
+]
