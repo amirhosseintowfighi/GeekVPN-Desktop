@@ -111,3 +111,93 @@ fn smart_route_is_v2rayngs_white_iran() {
     let direct = client_config(&s, None, Route::Direct, LocalPorts { socks: 1, http: 2 });
     assert_eq!(direct["routing"]["rules"][0]["outboundTag"], "direct");
 }
+
+fn tun_spec(route: Route, apps: AppRouting) -> TunSpec {
+    TunSpec {
+        upstream: Upstream { port: 20808, username: "u".into(), password: "p".into() },
+        route,
+        direct: RuleLists { domain_suffix: vec!["ir".into()], ip_cidr: vec!["2.144.0.0/14".into()], ..Default::default() },
+        apps,
+        core_paths: vec!["/opt/GeekVPN/geekcore".into()],
+    }
+}
+
+fn host(ipv6: bool) -> TunHost {
+    TunHost { interface: Some("geekvpn0".into()), ipv6, clash_port: 29090, clash_secret: "s".into(), mark: Some(LINUX_MARK) }
+}
+
+/// Where a rule sends matching traffic, found by what it matches on.
+fn outbound_for<'a>(c: &'a serde_json::Value, key: &str) -> Vec<&'a serde_json::Value> {
+    c["route"]["rules"].as_array().unwrap().iter().filter(|r| r.get(key).is_some()).collect()
+}
+
+#[test]
+fn tun_sends_the_engine_itself_direct_before_anything_else() {
+    let c = tun_config(&tun_spec(Route::Global, AppRouting::default()), &host(true));
+    let rules = c["route"]["rules"].as_array().unwrap();
+    // sniff, DNS hijack, then the engine: its connections to the server
+    // must never re-enter the tunnel.
+    assert_eq!(rules[1]["action"], "hijack-dns");
+    assert_eq!(rules[2]["process_path"], json!(["/opt/GeekVPN/geekcore"]));
+    assert_eq!(rules[2]["outbound"], "direct");
+    assert_eq!(c["dns"]["rules"][0]["server"], "local");
+    assert_eq!(c["route"]["final"], "proxy");
+    assert_eq!(c["route"]["default_mark"], LINUX_MARK);
+    assert_eq!(c["outbounds"][0]["username"], "u");
+    assert_eq!(c["experimental"]["clash_api"]["external_controller"], "127.0.0.1:29090");
+    // Global has no Iran list.
+    assert!(outbound_for(&c, "rule_set").is_empty());
+}
+
+#[test]
+fn tun_smart_routes_iran_direct_like_xray() {
+    let c = tun_config(&tun_spec(Route::Smart, AppRouting::default()), &host(true));
+    assert_eq!(outbound_for(&c, "rule_set")[0]["outbound"], "direct");
+    let set = &c["route"]["rule_set"][0];
+    assert_eq!(set["type"], "inline");
+    assert_eq!(set["rules"][0]["domain_suffix"], json!(["ir"]));
+    assert_eq!(set["rules"][1]["ip_cidr"], json!(["2.144.0.0/14"]));
+    assert!(c["route"]["rules"].as_array().unwrap().iter().any(|r| r["network"] == "udp" && r["port"] == 443 && r["action"] == "reject"));
+    assert!(c["dns"]["rules"].as_array().unwrap().iter().any(|r| r["rule_set"] == "iran" && r["server"] == "local"));
+    assert_eq!(c["dns"]["final"], "remote");
+
+    let direct = tun_config(&tun_spec(Route::Direct, AppRouting::default()), &host(true));
+    assert_eq!(direct["route"]["final"], "direct");
+    assert_eq!(direct["dns"]["final"], "local");
+}
+
+#[test]
+fn tun_app_modes() {
+    let apps = |mode| AppRouting { mode, paths: vec!["/usr/bin/telegram-desktop".into()] };
+    let bypass = tun_config(&tun_spec(Route::Global, apps(AppMode::Bypass)), &host(true));
+    let r = outbound_for(&bypass, "process_path");
+    assert_eq!((r[1]["process_path"][0].as_str(), r[1]["outbound"].as_str(), r[1].get("invert")), (Some("/usr/bin/telegram-desktop"), Some("direct"), None));
+
+    let only = tun_config(&tun_spec(Route::Global, apps(AppMode::Only)), &host(true));
+    let r = outbound_for(&only, "process_path");
+    assert_eq!((r[1]["invert"].as_bool(), r[1]["outbound"].as_str()), (Some(true), Some("direct")));
+
+    // "Only these apps" with no apps would send everything direct.
+    let empty = tun_config(&tun_spec(Route::Global, AppRouting { mode: AppMode::Only, paths: vec![] }), &host(true));
+    assert_eq!(outbound_for(&empty, "process_path").len(), 1);
+}
+
+#[test]
+fn tun_without_ipv6_skips_what_sing_box_would_refuse() {
+    let c = tun_config(&tun_spec(Route::Global, AppRouting::default()), &host(false));
+    assert_eq!(c["inbounds"][0]["address"], json!(["172.19.0.1/30"]));
+    assert_eq!(c["inbounds"][0]["strict_route"], false);
+    let with = tun_config(&tun_spec(Route::Global, AppRouting::default()), &host(true));
+    assert_eq!(with["inbounds"][0]["strict_route"], true);
+}
+
+#[test]
+fn tun_upstream_is_locked_and_sends_everything_to_the_server() {
+    let s = Server::parse(VLESS_WS_TLS).unwrap();
+    let up = Upstream { port: 20808, username: "u".into(), password: "p".into() };
+    let c = tun_upstream_config(&s, None, &up);
+    assert_eq!(c["inbounds"].as_array().unwrap().len(), 1);
+    assert_eq!(c["inbounds"][0]["settings"]["auth"], "password");
+    assert_eq!(c["inbounds"][0]["settings"]["accounts"][0]["pass"], "p");
+    assert_eq!(c["routing"]["rules"][0]["outboundTag"], "proxy");
+}

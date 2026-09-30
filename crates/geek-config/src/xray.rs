@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::link::Server;
+use crate::singbox::Upstream;
 
 /// «مسیر ترافیک», with the Android app's meaning of each choice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -51,6 +52,25 @@ pub fn client_config(server: &Server, address_override: Option<&str>, route: Rou
             "rules": rules(route),
         },
         // Byte counters for the live speed; read by geekcore's core.traffic.
+        "stats": {},
+        "policy": { "system": { "statsOutboundUplink": true, "statsOutboundDownlink": true } },
+    })
+}
+
+/// The engine behind sing-box in TUN mode: one SOCKS inbound locked with
+/// `upstream`'s credentials, everything it receives to the server. The
+/// routing choice was already made in sing-box.
+pub fn tun_upstream_config(server: &Server, address_override: Option<&str>, upstream: &Upstream) -> Value {
+    json!({
+        "log": { "loglevel": "warning" },
+        "inbounds": [
+            { "tag": "socks", "listen": "127.0.0.1", "port": upstream.port, "protocol": "socks",
+              "settings": { "udp": true, "ip": "127.0.0.1", "auth": "password",
+                            "accounts": [{ "user": upstream.username, "pass": upstream.password }] },
+              "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true } },
+        ],
+        "outbounds": [server.outbound("proxy", address_override)],
+        "routing": { "domainStrategy": "AsIs", "rules": [{ "type": "field", "outboundTag": "proxy", "network": "tcp,udp" }] },
         "stats": {},
         "policy": { "system": { "statsOutboundUplink": true, "statsOutboundDownlink": true } },
     })
