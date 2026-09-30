@@ -76,7 +76,7 @@ export function Split() {
             دامنه‌ها و IPهای ایران (geosite:category-ir و geoip:ir) از VPN رد نمی‌شوند؛ بانک‌ها و درگاه‌ها بدون خطا کار می‌کنند. همان «مسیر هوشمند» تنظیمات است.
           </span>
         </span>
-        <Switch label="سایت‌های ایرانی مستقیم" checked={view?.route === "smart"} onChange={(v) => void set({ route: v ? "smart" : "global" })} />
+        <Switch onNavy label="سایت‌های ایرانی مستقیم" checked={view?.route === "smart"} onChange={(v) => void set({ route: v ? "smart" : "global" })} />
       </section>
 
       {!tun && (
