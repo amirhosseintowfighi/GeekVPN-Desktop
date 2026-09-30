@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Icon, type IconName } from "../design-system/Icon";
 import { Logo } from "../design-system/Logo";
-import { CountryBadge, PingBars } from "../design-system/controls";
+import { Button, CountryBadge, PingBars } from "../design-system/controls";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
 import { countryCode, daysLeft, elapsed, plainName, speed } from "../lib/format";
@@ -73,7 +73,7 @@ function SpeedGraph() {
 /** Desktop-Home and Desktop-Home-Connecting, driven by the real tunnel state. */
 export function Home() {
   const { view: auth, showSignIn } = useAuth();
-  const { view, state, stats, busy, toggle } = useTunnel();
+  const { view, state, stats, busy, toggle, disconnect } = useTunnel();
   const on = state.status === "on";
   const connecting = state.status === "connecting";
   const now = useNow(on);
@@ -175,6 +175,13 @@ export function Home() {
               {state.status === "failed" ? state.message : subtitle}
             </span>
             {on && state.note && <span className="rounded-xl bg-white/15 px-3 py-2 text-xs leading-[1.8]">{state.note}</span>}
+            {state.status === "failed" && state.blocking && (
+              <span className="flex">
+                <Button kind="white" icon="power" height={40} disabled={busy} onClick={disconnect}>
+                  قطع و باز کردن اینترنت
+                </Button>
+              </span>
+            )}
             {server ? (
               <Link to="/servers" className="glass-milk mt-1.5 flex max-w-[380px] items-center gap-3 rounded-[20px] py-2.5 pe-3.5 ps-2.5 no-underline">
                 <CountryBadge code={countryCode(server.name)} selected size={44} />

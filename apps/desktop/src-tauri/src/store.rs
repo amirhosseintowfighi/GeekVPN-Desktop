@@ -33,6 +33,8 @@ pub enum SourceKind {
 pub struct Source {
     pub id: String,
     pub name: String,
+    /// Flattened: the UI reads `kind` and the account fields beside `id`.
+    #[serde(flatten)]
     pub kind: SourceKind,
     /// The subscription URL (account services and added links).
     pub url: Option<String>,
@@ -267,5 +269,27 @@ mod wire {
         assert_eq!(acc["kind"], "account");
         assert_eq!(acc["quotaGib"], 40.0);
         assert!(acc.get("subscriptionId").is_some());
+
+        // A source carries its kind flattened, as `Source` in lib/servers.ts.
+        let src = serde_json::to_value(super::Source {
+            id: "geek-x".into(),
+            name: "n".into(),
+            kind: SourceKind::Account {
+                subscription_id: "x".into(),
+                tier: None,
+                state: "active".into(),
+                expires_at: None,
+                quota_gib: Some(40.0),
+                used_gib: 1.0,
+            },
+            url: None,
+            links: vec![],
+            updated_at: None,
+        })
+        .unwrap();
+        assert_eq!(src["kind"], "account");
+        assert_eq!(src["quotaGib"], 40.0);
+        let back: super::Source = serde_json::from_value(src).unwrap();
+        assert!(matches!(back.kind, SourceKind::Account { .. }));
     }
 }

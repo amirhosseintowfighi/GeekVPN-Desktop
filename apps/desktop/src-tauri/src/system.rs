@@ -13,7 +13,7 @@ use crate::servers::ServersState;
 use crate::tunnel::helper_message;
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase", tag = "state")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "state")]
 pub enum HelperStatus {
     /// Nothing answers on the helper's socket.
     Missing { reason: String },
@@ -132,9 +132,19 @@ struct ClashConn {
 struct ClashMeta {
     network: String,
     host: String,
+    // "IP", not "Ip": Clash's own spelling.
+    #[serde(rename = "destinationIP")]
     destination_ip: String,
     destination_port: String,
     process_path: String,
+}
+
+/// sing-box writes the path as "/usr/bin/curl (alice)", user appended.
+fn strip_user(path: &str) -> &str {
+    match path.rfind(" (") {
+        Some(i) if path.ends_with(')') => &path[..i],
+        _ => path,
+    }
 }
 
 #[derive(Serialize)]
@@ -188,14 +198,15 @@ pub async fn connections_list(state: State<'_, ServersState>) -> Result<Connecti
         .into_iter()
         .map(|c| {
             let m = c.metadata;
-            let process = m.process_path.rsplit(['/', '\\']).next().unwrap_or("").to_string();
+            let path = strip_user(&m.process_path).to_string();
+            let process = path.rsplit(['/', '\\']).next().unwrap_or("").to_string();
             ConnectionView {
                 id: c.id,
                 host: if m.host.is_empty() { m.destination_ip } else { m.host },
                 port: m.destination_port,
                 network: m.network,
                 process,
-                process_path: m.process_path,
+                process_path: path,
                 upload: c.upload,
                 download: c.download,
                 start: c.start,
@@ -261,4 +272,20 @@ pub async fn programs_running() -> Result<Vec<ProgramView>, String> {
     })
     .await
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn clash_connection_fields() {
+        let c: super::ClashConn = serde_json::from_value(serde_json::json!({
+            "id": "1", "upload": 5, "download": 7, "start": "2026-09-30T06:00:00Z", "chains": ["proxy"],
+            "metadata": { "network": "tcp", "host": "", "destinationIP": "45.90.28.30", "destinationPort": "80",
+                          "processPath": "/usr/bin/curl (root)" }
+        }))
+        .unwrap();
+        assert_eq!(c.metadata.destination_ip, "45.90.28.30");
+        assert_eq!(super::strip_user(&c.metadata.process_path), "/usr/bin/curl");
+        assert_eq!(super::strip_user(r"C:\Program Files (x86)\Steam\steam.exe"), r"C:\Program Files (x86)\Steam\steam.exe");
+    }
 }

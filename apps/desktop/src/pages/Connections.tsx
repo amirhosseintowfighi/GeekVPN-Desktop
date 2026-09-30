@@ -107,9 +107,9 @@ export function Connections() {
       <div className="flex items-center gap-3">
         <ClearChips
           options={[
-            { value: "all", label: `همه · ${faDigits(counts.all)}` },
-            { value: "proxy", label: `VPN · ${faDigits(counts.proxy)}` },
-            { value: "direct", label: `مستقیم · ${faDigits(counts.direct)}` },
+            { value: "all", label: `همه ${faDigits(counts.all)}` },
+            { value: "proxy", label: `VPN ${faDigits(counts.proxy)}` },
+            { value: "direct", label: `مستقیم ${faDigits(counts.direct)}` },
           ]}
           value={filter}
           onChange={setFilter}

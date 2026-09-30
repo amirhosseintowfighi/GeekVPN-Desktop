@@ -16,6 +16,8 @@ interface TunnelContextValue {
   error: string | null;
   clearError: () => void;
   toggle: () => void;
+  /** «قطع» from any state, including a failure the kill switch holds shut. */
+  disconnect: () => void;
   refresh: () => Promise<void>;
   test: () => Promise<void>;
   add: (text: string) => Promise<boolean>;
@@ -84,6 +86,10 @@ export function TunnelProvider({ children }: { children: ReactNode }) {
       // A failed connect already arrives as a "failed" state with its message.
       const act = state.status === "on" || state.status === "connecting" ? tunnel.disconnect() : tunnel.connect();
       void act.catch(() => {}).finally(() => setBusy(false));
+    },
+    disconnect: () => {
+      setBusy(true);
+      void tunnel.disconnect().catch(() => {}).finally(() => setBusy(false));
     },
     refresh: async () => {
       const v = await guard(() => servers.refresh());
