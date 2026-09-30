@@ -79,18 +79,17 @@ mod tests {
         assert!(!strict.contains("192.168.0.0/16"));
         let lan = ruleset(&KillSwitch { allow_lan: true, strict: false });
         assert!(lan.contains("ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4 } accept"));
-        // nft itself checks the syntax, when it is installed: -c only
-        // parses, nothing is applied.
+        // nft itself checks the syntax (-c parses, applies nothing), when it
+        // is installed and we are root: even a check needs CAP_NET_ADMIN,
+        // and without it older nft (Ubuntu 22.04's) fails silently, which
+        // could not be told apart from a syntax error.
+        let root = Command::new("id").arg("-u").output().is_ok_and(|o| o.stdout.trim_ascii() == b"0");
         let nft = Command::new("nft").args(["-c", "-f", "-"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
-        if let Ok(mut c) = nft {
+        if let (true, Ok(mut c)) = (root, nft) {
             c.stdin.take().unwrap().write_all(lan.as_bytes()).unwrap();
             let out = c.wait_with_output().unwrap();
-            // Older nft (Ubuntu 22.04's) reports on stdout.
             let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-            // Without CAP_NET_ADMIN nft cannot even check; that is not a
-            // syntax error, and a syntax error never reads like this.
-            let no_rights = said.contains("Operation not permitted") || said.contains("Permission denied");
-            assert!(out.status.success() || no_rights, "nft -c: {:?} {said}", out.status);
+            assert!(out.status.success(), "nft -c: {:?} {said}", out.status);
         }
     }
 }
