@@ -1,0 +1,9 @@
+{
+  "type": "about:blank",
+  "title": "invalid_credentials",
+  "status": 401,
+  "detail": "Unknown username or wrong password.",
+  "message_fa": "نام کاربری یا گذرواژه درست نیست.",
+  "instance": "/api/app/auth/password",
+  "correlation_id": null
+}

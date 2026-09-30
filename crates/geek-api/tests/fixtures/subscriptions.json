@@ -1,0 +1,17 @@
+[
+  {
+    "subscriptionId": "00000000-0000-0000-0000-000000000009",
+    "planId": "00000000-0000-0000-0000-000000000008",
+    "productNameFa": "۴۰ گیگ",
+    "planNameFa": "یک‌ماهه",
+    "state": "active",
+    "expiresAt": "2026-10-27T00:00:00+00:00",
+    "quotaGib": 40,
+    "usedGib": 12.4,
+    "deviceLimit": 2,
+    "subscriptionUrl": "https://sub.example.com/sub/TOKEN",
+    "createdAt": "2026-09-27T00:00:00+00:00",
+    "remoteUsername": "u123",
+    "tier": "direct"
+  }
+]

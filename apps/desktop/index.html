@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeekVPN</title>
+    <script>
+      // Paint the chosen theme before React mounts, so a dark-mode user never
+      // sees one frame of the light backdrop.
+      try {
+        var t = localStorage.getItem("geek.theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

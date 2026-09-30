@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GeekVPN",
+  "version": "0.1.0",
+  "identifier": "com.geekvpn.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "GeekVPN",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "center": true,
+        "decorations": false,
+        "shadow": true,
+        "backgroundColor": "#0870D4"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost",
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "GeekVPN",
+    "longDescription": "GeekVPN desktop client for Windows, macOS and Linux.",
+    "copyright": "GPL-3.0",
+    "license": "GPL-3.0-only",
+    "externalBin": ["binaries/geekcore"],
+    "resources": ["resources/geo/geoip.dat", "resources/geo/geosite.dat", "resources/geo/geoip-only-cn-private.dat"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "macOS": { "minimumSystemVersion": "13.0" },
+    "linux": {
+      "deb": { "depends": [] }
+    }
+  }
+}

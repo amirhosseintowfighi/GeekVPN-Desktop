@@ -1,0 +1,20 @@
+--- a/infra/conf/xray.go
++++ b/infra/conf/xray.go
+@@ -238,14 +238,9 @@
+ 		return nil
+ 	}
+ 
+-	if vlessCfg, ok := rawConfig.(*VLessOutboundConfig); ok {
+-		if vlessCfg.Encryption != "" && vlessCfg.Encryption != "none" {
+-			return nil
+-		}
+-		if requiresTransportSecurity(vlessCfg.Address) {
+-			return errors.New("vless without TLS or other encryption is prohibited unless the server address is a private IP or domain")
+-		}
+-	}
++	// GeekVPN: plain VLESS (no TLS, no VLESS encryption) stays allowed, as older
++	// Xray releases did: GeekVPN's tunnel services still use it behind a CDN.
++	// See scripts/xray-patches/README.md for when to drop this patch.
+ 
+ 	if tjCfg, ok := rawConfig.(*TrojanClientConfig); ok {
+ 		if requiresTransportSecurity(tjCfg.Servers[0].Address) {
