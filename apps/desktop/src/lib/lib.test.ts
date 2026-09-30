@@ -47,7 +47,7 @@ describe("theme", () => {
   });
 });
 
-import { countryCode, daysLeft, elapsed, plainName, speed } from "./format";
+import { ago, bytes, countryCode, daysLeft, elapsed, plainName, speed } from "./format";
 
 describe("format", () => {
   it("writes speeds the way the design does", () => {
@@ -64,5 +64,16 @@ describe("format", () => {
     expect(countryCode("🇩🇪 Germany")).toBe("DE");
     expect(plainName("🇩🇪 Germany")).toBe("Germany");
     expect(countryCode("tunnel-1")).toBe("TU");
+  });
+});
+
+describe("connection figures", () => {
+  it("bytes and age read as the Connections table writes them", () => {
+    expect(bytes(610)).toBe("610 B");
+    expect(bytes(1311)).toBe("1.28 KB");
+    expect(bytes(2.31 * 1024 * 1024)).toBe("2.31 MB");
+    const now = Date.parse("2026-09-30T10:00:00Z");
+    expect(ago("2026-09-30T09:59:55Z", now)).toBe("همین الان");
+    expect(ago("2026-09-30T09:55:00Z", now)).toBe("5 دقیقه پیش");
   });
 });

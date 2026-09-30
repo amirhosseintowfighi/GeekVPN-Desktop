@@ -66,11 +66,17 @@ jobs:
         with:
           go-version-file: core/geekcore/go.mod
           cache-dependency-path: core/geekcore/go.sum
-      # The engine and its geo data are sidecar and resources of the bundle;
-      # tauri-build refuses to compile without them.
+      # The engines, the helper and the geo data are sidecars and resources
+      # of the bundle; tauri-build refuses to compile without them.
       - name: Build geekcore
         shell: bash
         run: scripts/build-geekcore.sh ${{ matrix.triple }}
+      - name: Build sing-box
+        shell: bash
+        run: scripts/build-singbox.sh ${{ matrix.triple }}
+      - name: Build geekvpn-helper
+        shell: bash
+        run: scripts/build-helper.sh ${{ matrix.triple }}
       - name: Geo data
         shell: bash
         run: scripts/fetch-geo.sh

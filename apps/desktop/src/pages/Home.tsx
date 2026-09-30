@@ -215,7 +215,11 @@ export function Home() {
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
           <Stat icon="bolt" label="تأخیر" value={on ? `${state.delayMs}` : "—"} unit={on ? "ms" : undefined} />
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="shield" label="پروکسی محلی" value={on ? `${state.httpPort}` : "—"} unit={on ? "HTTP" : undefined} />
+          {on && state.mode === "tun" ? (
+            <Stat icon="shield" label="حالت" value="TUN" unit={state.killSwitch ? "Kill Switch" : undefined} />
+          ) : (
+            <Stat icon="shield" label="پروکسی محلی" value={on ? `${state.httpPort}` : "—"} unit={on ? "HTTP" : undefined} />
+          )}
           <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
           <Stat icon="clock" label="زمان باقی‌مانده" value={left === null ? "—" : `${faDigits(left)} روز`} />
         </div>
