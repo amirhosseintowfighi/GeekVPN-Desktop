@@ -1,4 +1,5 @@
 mod auth;
+mod desktop;
 mod servers;
 mod store;
 mod system;
@@ -72,14 +73,25 @@ pub fn run() {
         // A second launch (autostart plus a click on the shortcut, or a
         // `geekvpn://` link later) must bring the running window forward, not
         // start a second core that fights the first over the TUN device.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| desktop::show_main(app)))
+        // Size and place, not visibility: whether the window shows at launch
+        // is autostart's (--minimized) and close-to-tray's decision.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
+                .build(),
+        )
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![desktop::MINIMIZED])))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        desktop::toggle_connection(app);
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -104,11 +116,11 @@ pub fn run() {
             let tunnel = Arc::new(tunnel::Tunnel::new(core_binary()?, geo_dir(app)?, data.join("proxy-snapshot.json")));
             // A previous run that died connected left the system proxy on.
             tunnel.recover();
-            app.manage(servers::ServersState {
-                store: tokio::sync::Mutex::new(store::Store::load(data.join("servers.json"))),
-                tunnel: tunnel.clone(),
-            });
+            let saved = store::Store::load(data.join("servers.json"));
+            let settings = saved.data.clone();
+            app.manage(servers::ServersState { store: tokio::sync::Mutex::new(saved), tunnel: tunnel.clone() });
             restore_on_signals(app.handle().clone(), tunnel);
+            desktop::setup(app, &settings)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -132,15 +144,33 @@ pub fn run() {
             system::connections_list,
             system::connections_close,
             system::programs_running,
+            desktop::desktop_autostart,
+            desktop::desktop_open,
+            desktop::desktop_quit,
         ])
+        .on_window_event(|window, event| {
+            // Closing the main window keeps GeekVPN beside the clock.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && desktop::closes_to_tray(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("GeekVPN failed to start")
         .run(|app, event| {
-            // Whatever the way out, the system proxy goes back to the user's.
-            if let tauri::RunEvent::Exit = event {
-                if let Some(s) = app.try_state::<servers::ServersState>() {
-                    tauri::async_runtime::block_on(s.tunnel.shutdown());
+            match event {
+                // Whatever the way out, the system proxy goes back to the user's.
+                tauri::RunEvent::Exit => {
+                    if let Some(s) = app.try_state::<servers::ServersState>() {
+                        tauri::async_runtime::block_on(s.tunnel.shutdown());
+                    }
                 }
+                // The Dock icon clicked while the window is hidden (macOS).
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen { .. } => desktop::show_main(app),
+                _ => {}
             }
         });
 }

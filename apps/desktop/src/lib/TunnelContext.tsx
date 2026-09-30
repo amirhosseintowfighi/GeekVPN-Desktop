@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { errorText } from "./auth";
 import { useAuth } from "./AuthContext";
+import { windowLabel } from "./desktop";
 import { servers, tunnel, type ServerSettings, type ServersView, type TunnelState, type TunnelStats } from "./servers";
 
 /** Seconds of speed history the live graph keeps. */
@@ -58,7 +59,8 @@ export function TunnelProvider({ children }: { children: ReactNode }) {
   // Signing in (or out) changes which services the account has.
   const userId = auth?.user?.id ?? null;
   useEffect(() => {
-    if (userId) void servers.refresh().then(setView).catch((e) => setError(errorText(e)));
+    // The main window keeps the account in sync; the tray panel only reads.
+    if (userId && windowLabel() === "main") void servers.refresh().then(setView).catch((e) => setError(errorText(e)));
   }, [userId]);
 
   const guard = async <T,>(f: () => Promise<T>): Promise<T | undefined> => {
