@@ -1,4 +1,5 @@
 mod auth;
+mod deeplink;
 mod desktop;
 mod report;
 mod scan;
@@ -9,6 +10,7 @@ mod support;
 mod system;
 mod tools;
 mod tunnel;
+mod update;
 mod usage;
 
 use std::sync::Arc;
@@ -87,6 +89,7 @@ pub fn run() {
                 .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
                 .build(),
         )
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![desktop::MINIMIZED])))
         .plugin(
@@ -102,6 +105,15 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin({
+            // The key the release workflow signs with, from the build; none
+            // means updates stay off (`update::pubkey`).
+            let mut updater = tauri_plugin_updater::Builder::new();
+            if let Some(key) = update::pubkey() {
+                updater = updater.pubkey(key);
+            }
+            updater.build()
+        })
         .setup(|app| {
             let version = app.package_info().version.to_string();
             let device = geek_secrets::device_info(&version, || {
@@ -131,8 +143,12 @@ pub fn run() {
             app.manage(scan::ScanRun { running: tokio::sync::Mutex::new(None) });
             app.manage(support::SupportState::new(data.join("support-seen.json")));
             support::watch(app.handle().clone(), app.state::<auth::AuthState>().session.clone());
+            app.manage(update::UpdateState::new(&data));
+            update::watch(app.handle().clone());
+            let resume = update::take_resume(&data);
             restore_on_signals(app.handle().clone(), tunnel);
-            desktop::setup(app, &settings)?;
+            desktop::setup(app, &settings, resume)?;
+            deeplink::setup(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -187,6 +203,9 @@ pub fn run() {
             support::report_preview,
             support::report_send,
             support::support_open_bot,
+            update::update_check,
+            update::update_state,
+            update::update_install,
             desktop::desktop_autostart,
             desktop::desktop_open,
             desktop::desktop_quit,

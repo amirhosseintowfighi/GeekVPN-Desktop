@@ -1,0 +1,145 @@
+name: Release
+
+# A `v*` tag builds every platform and publishes a draft GitHub release with
+# the installers, their updater signatures and `latest.json`, the manifest the
+# app's updater reads (through GeekVPNBot's `/api/app/desktop/update/...`).
+#
+# Everything secret comes from the repository's Secrets and Variables, never
+# from the tree (docs/ARCHITECTURE.md §8, §11). What is not configured is
+# skipped, not faked: without the updater key there is no latest.json, and
+# without a certificate the installers are unsigned.
+#
+#   Secrets
+#     GEEK_API_BASE_PROD                  the backend, https://
+#     TAURI_SIGNING_PRIVATE_KEY           `pnpm tauri signer generate`
+#     TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+#     WINDOWS_CERTIFICATE                 Authenticode .pfx, base64
+#     WINDOWS_CERTIFICATE_PASSWORD
+#     APPLE_CERTIFICATE                   Developer ID Application .p12, base64
+#     APPLE_CERTIFICATE_PASSWORD
+#     APPLE_SIGNING_IDENTITY              "Developer ID Application: … (TEAMID)"
+#     APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID   notarization (app-specific password)
+#   Variables
+#     GEEK_UPDATER_PUBKEY                 the public half of the updater key
+#     GEEK_BOT_USERNAME                   the Telegram bot, without @
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Release (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-22.04
+            triple: x86_64-unknown-linux-gnu
+            args: "--bundles deb,rpm,appimage"
+          - name: windows
+            os: windows-latest
+            triple: x86_64-pc-windows-msvc
+            args: "--bundles nsis"
+          - name: macos
+            os: macos-latest
+            triple: universal-apple-darwin
+            args: "--target universal-apple-darwin --bundles app,dmg"
+    runs-on: ${{ matrix.os }}
+    env:
+      GEEK_ENV: prod
+      GEEK_API_BASE_PROD: ${{ secrets.GEEK_API_BASE_PROD }}
+      GEEK_BOT_USERNAME: ${{ vars.GEEK_BOT_USERNAME }}
+      GEEK_UPDATER_PUBKEY: ${{ vars.GEEK_UPDATER_PUBKEY }}
+      GEEK_RELEASE_REPO: ${{ github.repository }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the configuration
+        shell: bash
+        run: |
+          [ -n "$GEEK_API_BASE_PROD" ] || { echo "::error::Secret GEEK_API_BASE_PROD is not set: a release must reach the real backend."; exit 1; }
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -z "$GEEK_UPDATER_PUBKEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is set but variable GEEK_UPDATER_PUBKEY is not: the app could not verify its own updates."; exit 1
+          fi
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || echo "::warning::No updater key: this release has no latest.json and installed apps will not update to it."
+          [ "${{ matrix.name }}" != windows ] || [ -n "$WINDOWS_CERTIFICATE" ] || echo "::warning::No Windows certificate: the installer is unsigned (SmartScreen will warn)."
+          [ "${{ matrix.name }}" != macos ] || [ -n "$APPLE_CERTIFICATE" ] || echo "::warning::No Apple certificate: the app is unsigned and not notarized."
+
+      - name: Linux build dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf rpm
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/geekcore/go.mod
+          cache-dependency-path: core/geekcore/go.sum
+      - name: Build geekcore
+        shell: bash
+        run: scripts/build-geekcore.sh ${{ matrix.triple }}
+      - name: Build sing-box
+        shell: bash
+        run: scripts/build-singbox.sh ${{ matrix.triple }}
+      - name: Build geekvpn-helper
+        shell: bash
+        run: scripts/build-helper.sh ${{ matrix.triple }}
+      - name: Geo data
+        shell: bash
+        run: scripts/fetch-geo.sh
+      - run: pnpm install --frozen-lockfile
+
+      - name: Windows code-signing certificate
+        if: matrix.name == 'windows' && env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "geekvpn.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx
+          "WINDOWS_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # The version is the tag's; updater artifacts and Windows signing only
+      # when their keys exist.
+      - name: Release configuration
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node scripts/release-config.mjs "$version" > "$RUNNER_TEMP/release.conf.json"
+          cat "$RUNNER_TEMP/release.conf.json"
+
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: GeekVPN ${{ github.ref_name }}
+          releaseBody: See the notes below. Installers are verified by the app's updater before they install.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          args: ${{ matrix.args }} --config ${{ runner.temp }}/release.conf.json

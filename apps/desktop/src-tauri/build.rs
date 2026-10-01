@@ -3,7 +3,14 @@
 //! Android app's `GEEK_API_BASE_*`.
 
 fn main() {
-    for var in ["GEEK_ENV", "GEEK_API_BASE_PROD", "GEEK_API_BASE_STAGING", "GEEK_BOT_USERNAME"] {
+    for var in [
+        "GEEK_ENV",
+        "GEEK_API_BASE_PROD",
+        "GEEK_API_BASE_STAGING",
+        "GEEK_BOT_USERNAME",
+        "GEEK_UPDATER_PUBKEY",
+        "GEEK_RELEASE_REPO",
+    ] {
         println!("cargo:rerun-if-env-changed={var}");
     }
     let release = std::env::var("PROFILE").as_deref() == Ok("release");
@@ -34,5 +41,27 @@ fn main() {
         "GEEK_BOT_USERNAME must be a Telegram username, got {bot:?}"
     );
     println!("cargo:rustc-env=GEEK_BOT_USERNAME={bot}");
+
+    // Updates: the minisign public key the release workflow signs with
+    // (`tauri signer generate`), and where the signed manifest is read. The
+    // backend serves it through the mirror Iran can reach; GitHub's own
+    // release is the fallback. No key, no updater: a build that cannot verify
+    // an update never installs one.
+    let pubkey = std::env::var("GEEK_UPDATER_PUBKEY").unwrap_or_default().trim().to_string();
+    assert!(
+        pubkey.is_empty() || pubkey.len() > 40 && pubkey.chars().all(|c| c.is_ascii_alphanumeric() || "+/=".contains(c)),
+        "GEEK_UPDATER_PUBKEY must be the base64 public key `tauri signer generate` prints"
+    );
+    println!("cargo:rustc-env=GEEK_UPDATER_PUBKEY={pubkey}");
+    let mut endpoints = vec![format!("{base}api/app/desktop/update/{{{{target}}}}/{{{{arch}}}}/{{{{current_version}}}}?bundle={{{{bundle_type}}}}")];
+    let repo = std::env::var("GEEK_RELEASE_REPO").unwrap_or_default().trim().to_string();
+    if !repo.is_empty() {
+        assert!(
+            repo.split('/').count() == 2 && repo.chars().all(|c| c.is_ascii_alphanumeric() || "-_./".contains(c)),
+            "GEEK_RELEASE_REPO must be owner/repo, got {repo:?}"
+        );
+        endpoints.push(format!("https://github.com/{repo}/releases/latest/download/latest.json"));
+    }
+    println!("cargo:rustc-env=GEEK_UPDATE_ENDPOINTS={}", endpoints.join(" "));
     tauri_build::build()
 }

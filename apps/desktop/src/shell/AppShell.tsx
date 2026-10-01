@@ -5,6 +5,7 @@ import { currentOs } from "../lib/platform";
 import { Backdrop } from "./Backdrop";
 import { Sidebar } from "./Sidebar";
 import { TitleBar } from "./TitleBar";
+import { UpdateProvider } from "./UpdateDialog";
 
 export function AppShell() {
   const os = useMemo(currentOs, []);
@@ -24,12 +25,14 @@ export function AppShell() {
 
   return (
     <div dir="rtl" className="relative h-full w-full overflow-hidden bg-bg text-on-bg">
-      <Backdrop />
-      <TitleBar os={os} />
-      <Sidebar />
-      <main className="absolute bottom-5 left-5 right-[126px] top-[38px] flex gap-5">
-        <Outlet />
-      </main>
+      <UpdateProvider>
+        <Backdrop />
+        <TitleBar os={os} />
+        <Sidebar />
+        <main className="absolute bottom-5 left-5 right-[126px] top-[38px] flex gap-5">
+          <Outlet />
+        </main>
+      </UpdateProvider>
     </div>
   );
 }
