@@ -11,6 +11,7 @@ import { applyTheme, loadTheme, type ThemeChoice } from "../lib/theme";
 import { desktop } from "../lib/desktop";
 import { currentOs } from "../lib/platform";
 import { useTunnel } from "../lib/TunnelContext";
+import { useUpdate } from "../shell/UpdateDialog";
 
 const THEMES = [
   { value: "light", label: "روشن" },
@@ -92,6 +93,7 @@ function HelperCard() {
 }
 
 export function Settings() {
+  const update = useUpdate();
   const { view, set, state } = useTunnel();
   const navigate = useNavigate();
   const [theme, setTheme] = useState<ThemeChoice>(loadTheme);
@@ -247,7 +249,15 @@ export function Settings() {
           </Group>
           {version && (
             <Card>
-              <CardTitle title="درباره‌ی برنامه" subtitle={`نسخه‌ی ${faDigits(version)} · لایسنس GPL-3.0`} />
+              <CardTitle
+                title="درباره‌ی برنامه"
+                subtitle={`نسخه‌ی ${faDigits(version)} · لایسنس GPL-3.0`}
+                actions={
+                  <Button kind={update.view?.available ? "action" : "soft"} icon="dl" height={36} onClick={update.openDialog}>
+                    {update.view?.available ? `نسخه‌ی ${faDigits(update.view.available.version)}` : "بررسی به‌روزرسانی"}
+                  </Button>
+                }
+              />
             </Card>
           )}
         </div>

@@ -46,5 +46,14 @@
       "deb": { "depends": [], "postInstallScript": "linux/postinst.sh", "preRemoveScript": "linux/prerm.sh" },
       "rpm": { "postInstallScript": "linux/postinst.sh", "preRemoveScript": "linux/prerm.sh" }
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [],
+      "requireSignedVersion": true,
+      "windows": { "installMode": "passive" }
+    },
+    "deep-link": { "desktop": { "schemes": ["geekvpn"] } }
   }
 }

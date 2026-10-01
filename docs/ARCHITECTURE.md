@@ -133,14 +133,14 @@ helper یک فایل state (`/var/lib/geekvpn/state.json`، `%ProgramData%\GeekV
 | refresh | `POST /api/v1/auth/refresh` `{refresh_token}` | single-flight. 401 یعنی نشست باطل شده (مثلاً دستگاه از ربات قطع شده) → پاک کردن سرویس‌های حساب و خروج، مثل اندروید. |
 | خروج | `POST /api/v1/auth/logout` | |
 | سرویس‌ها | `GET /api/miniapp/subscriptions` | `subscription_url`، `tier` (`direct/tunnel/elite`؛ اسکنر فقط برای `direct`)، `used_gib`، `quota_gib`، `expires_at`. اپ لینک اشتراک را خودش دانلود و parse می‌کند. |
-| فروشگاه، کیف پول، پرداخت | `/api/miniapp/storefront`, `quote`, `coupon/preview`, `payment-methods`, `checkout/*`, `wallet*`, `payments/*` | صفحه‌ی درگاه در مرورگر باز می‌شود و بعد از پرداخت مشتری «پرداخت کردم» را می‌زند. deep link `geekvpn://payment/result` (با `tauri-plugin-deep-link`) برای فاز ۶ مانده. |
+| فروشگاه، کیف پول، پرداخت | `/api/miniapp/storefront`, `quote`, `coupon/preview`, `payment-methods`, `checkout/*`, `wallet*`, `payments/*` | صفحه‌ی درگاه در مرورگر باز می‌شود. صفحه‌ی بازگشت بانک با `geekvpn://payment/result` مشتری را به فروشگاه برنامه برمی‌گرداند (دکمه‌ی «پرداخت کردم» هم هست). |
 | تست رایگان | `GET/POST /api/miniapp/trial` | |
 | ریفرال | `GET /api/miniapp/referral` | لینک دعوت با `GEEK_BOT_USERNAME` زمان build ساخته می‌شود. |
 | مصرف روزانه‌ی سرویس | `GET /api/miniapp/subscriptions/{id}/usage-days?days=` | ۱ تا ۶۰ روز، به وقت تهران، همه‌ی دستگاه‌های سرویس. |
 | تیکت | `GET/POST /api/miniapp/tickets`، `GET/POST /tickets/{id}/messages` | فقط متن؛ ضمیمه API ندارد (پایین). |
 | پروفایل | `GET/POST /api/miniapp/profile`، `preferences` | |
 | وضعیت سرورها | `GET /api/miniapp/servers` | |
-| آپدیت | `GET /api/app/version` | فقط APK برمی‌گرداند (پایین). |
+| آپدیت | `GET /api/app/desktop/update/{target}/{arch}/{version}?bundle=` | پاسخ به شکل updater خود Tauri، یا 204. |
 
 ### `device_id` پایدار
 `HMAC-SHA256(key = ثابت اپ, msg = machine_id)` به hex = دقیقاً ۶۴ کاراکتر. `machine_id` از `MachineGuid` رجیستری (ویندوز)، `IOPlatformUUID` (مک)، `/etc/machine-id` (لینوکس). شناسه‌ی خام هرگز فرستاده نمی‌شود. `device_name` = hostname کاربر (≤۶۴).
@@ -152,7 +152,7 @@ crate `keyring`: Credential Manager / Keychain / Secret Service (libsecret). ف�
 1. **متن ربات «اندروید» را hardcode کرده** (`APP_LOGIN_PROMPT`: «درخواست اتصال از اپلیکیشن اندروید GeekVPN») و `device_name` پیش‌فرض `"Android"` است. باید بر اساس `platform` بنویسد.
 2. ~~تاریخچه‌ی مصرف اندپوینت ندارد.~~ اضافه شد: `usage-days` (فاز ۵ از آن استفاده می‌کند).
 3. **ضمیمه‌ی تیکت** API ندارد (`attachment_count` در مدل هست). نیاز: `POST /api/miniapp/tickets/{id}/attachments` (مثل `receipt-photo` که فایل را در ربات برای ادمین می‌فرستد).
-4. **`/api/app/version`** فقط APK دارد. پیشنهاد: updater دسکتاپ مستقیم از `latest.json` امضاشده‌ی GitHub Releases بخواند (خروجی `tauri-action`) و بک‌اند فقط `min_version` دسکتاپ را اضافه کند.
+4. ~~`/api/app/version` فقط APK دارد.~~ اضافه شد: `/api/app/desktop/update/...` (فاز ۶).
 5. **خواندن تیکت آن را «خوانده‌شده» نمی‌کند.** `GET /tickets/{id}/messages` مثل ربات `mark_read` را صدا نمی‌زند، پس `unreadCount` هیچ‌وقت صفر نمی‌شود. دسکتاپ فعلاً خودش به خاطر می‌سپارد کدام جواب را نشان داده (`support-seen.json`). اصلاح درست: صدا زدن `mark_read(ticket_id, viewer_is_agent=False)` در همان route.
 
 ---
@@ -238,7 +238,7 @@ GeekVPN-Desktop/
 | Kill Switch پس از کرش | پیش‌فرض باز؛ «حالت سخت‌گیر» در تنظیمات. |
 | SmartConnect | مثل اندروید: ۳ تلاش (۱ + ۲ failover)، ۳ IP تمیز، آستانه‌ی failover پیش‌فرض ۲ ثانیه. |
 | Speedtest | `speed.cloudflare.com` از داخل proxy محلی، مثل اندروید (میانه‌ی ۵ پینگ، هر مرحله حداکثر ۱۰ ثانیه، دانلود ۵۰ و آپلود ۲۰ مگابایت). |
-| به‌روزرسانی | Tauri updater؛ منبع: GitHub Releases همین ریپو با mirror داخلی. endpoint دسکتاپ بک‌اند در فاز ۶ اضافه می‌شود. |
+| به‌روزرسانی | Tauri updater با امضای minisign؛ manifest از `GET /api/app/desktop/update/...` بک‌اند (با mirror داخلی) و در صورت نبودن، `latest.json` خود GitHub Releases. |
 
 ## ۹. هم‌ترازی با اپ اندروید (PR شماره‌ی ۳ ریپوی GeekVPN-Android)
 
@@ -286,7 +286,7 @@ GeekVPN-Desktop/
 | ۴a — tray و پنل کوچک، اجرا با سیستم، اتصال خودکار، بستن به tray، میانبر سراسری، نوتیفیکیشن‌ها | انجام شد؛ روی لینوکس تست شد |
 | ۴b — ابزارها (اسکنر کلادفلر، تست سرعت، لاگ هسته)، اتصال هوشمند و Failover زنده | انجام شد؛ Failover روی لینوکس end-to-end تست شد |
 | ۵ — فروشگاه و پرداخت، پشتیبانی، دعوت، مصرف، گزارش مشکل، قانون‌های دامنه | انجام شد؛ همه‌ی routeها end-to-end روی GeekVPNBot واقعی تست شدند |
-| ۶ — به‌روزرسانی داخل برنامه، امضا و انتشار | — |
+| ۶ — به‌روزرسانی داخل برنامه، امضا و انتشار | انجام شد؛ به‌روزرسانی (و رد بسته‌ی دست‌کاری‌شده) و deep link پرداخت روی لینوکس end-to-end تست شد |
 
 ### یادداشت‌های فاز ۲
 - `crates/geek-api`: کلاینت تایپ‌شده، `Session` با refresh یکی‌یکی (single-flight)، و `wait_for_approval` با retry و لغو. تست‌های قرارداد با fixtureهایی اجرا می‌شوند که از مدل‌های Pydantic خود بک‌اند ساخته شده‌اند (camelCase، `message_fa`).
@@ -458,3 +458,19 @@ GeekVPN-Desktop/
   - یک تست e2e جدید روی بک‌اند واقعی: فروشگاه، قیمت، کد تخفیف، checkout کارت، پرداخت‌های در جریان، کیف پول، افزایش موجودی، دعوت، تست رایگان، و تیکت‌ها.
   - روی لینوکس، همه‌ی صفحه‌ها با حساب واقعی. عدد روی «پشتیبانی» با جوابی که از سمت پشتیبان ثبت شد بالا آمد و با خواندن صفر شد.
 - **آنچه تست نشده**: پرداخت واقعی از درگاه و تأیید رسید در ربات، چون محیط تست بانک و ربات تلگرام ندارد.
+
+### یادداشت‌های فاز ۶
+- **به‌روزرسانی داخل برنامه** (`tauri-plugin-updater`):
+  - برنامه ۲۰ ثانیه بعد از اجرا و بعد هر ۶ ساعت می‌پرسد. نسخه‌ی جدید یک بار نوتیفیکیشن می‌دهد و در «حساب» و «تنظیمات ← درباره‌ی برنامه» دیده می‌شود. پنجره‌ی Desktop-Update تغییرات، پیشرفت دانلود و «نصب و راه‌اندازی دوباره» را نشان می‌دهد.
+  - manifest اول از بک‌اند می‌آید (`/api/app/desktop/update/{target}/{arch}/{version}?bundle=`)، که `latest.json` release را می‌خواند و آدرس فایل‌ها را به mirror داخلی می‌برد. اگر بک‌اند جواب ندهد، `latest.json` خود GitHub.
+  - هیچ‌کدام از این دو قابل اعتماد فرض نمی‌شوند: هر بسته امضای minisign دارد که با کلید عمومیِ داخل برنامه (`GEEK_UPDATER_PUBKEY` زمان build) بررسی می‌شود، و `requireSignedVersion` جلوی برگرداندن به نسخه‌ی قدیمی‌تر را می‌گیرد. build بدون کلید اصلاً به‌روزرسانی نمی‌کند.
+  - هر نوع نصب بسته‌ی خودش را می‌گیرد: NSIS، `.app`، AppImage، و `.deb` یا `.rpm` (با pkexec).
+  - VPN حین دانلود وصل می‌ماند. فقط برای خود نصب، پروکسی سیستم برمی‌گردد و TUN بسته می‌شود؛ اگر وصل بود، نسخه‌ی جدید بعد از اجرا دوباره وصل می‌شود.
+  - اگر بک‌اند بگوید نسخه از `APP_RELEASE__DESKTOP_MIN_VERSION` قدیمی‌تر است، پنجره خودش باز می‌شود و «بعداً» ندارد.
+- **deep link**: `geekvpn://payment/result?payment=…&result=ok|pending|failed` (همان آدرسی که صفحه‌ی بازگشت درگاه در GeekVPNBot برای اپ اندروید می‌سازد) پنجره را جلو می‌آورد و فروشگاه را با پیام نتیجه باز می‌کند. نتیجه فقط یک نشانه است؛ پرداخت‌ها و سرویس‌ها دوباره از سرور خوانده می‌شوند. با single-instance، لینکی که یک اجرای دوم را باز کند به همان برنامه‌ی در حال اجرا می‌رسد.
+- **انتشار** (`.github/workflows/release.yml`): tag ‏`v*` ← build هر سه سیستم‌عامل با `tauri-action` و release پیش‌نویس با نصب‌کننده‌ها، امضاهای updater و `latest.json`. امضای ویندوز (Authenticode) و مک (Developer ID و notarize) از Secrets؛ هر کدام نباشد، آن بخش انجام نمی‌شود و هشدار می‌دهد. جزئیات در README.
+- **تست‌شده روی لینوکس** (AppImage، با سرور محلی که همان کد بک‌اند را اجرا می‌کرد):
+  - نسخه‌ی ۰٫۱٫۰ نسخه‌ی ۰٫۱٫۱ را پیدا کرد، دانلود کرد، امضا را بررسی کرد، فایل را جایگزین کرد و با نسخه‌ی جدید دوباره اجرا شد.
+  - بسته‌ای که با امضا جور نبود رد شد و برنامه دست نخورد.
+  - لینک بازگشت پرداخت از یک اجرای دوم به برنامه‌ی در حال اجرا رسید و فروشگاه را با «پرداخت تأیید شد» باز کرد.
+- **آنچه تست نشده**: نصب‌کننده‌ی ویندوز و مک و امضا و notarize واقعی، چون گواهی‌ها هنوز وجود ندارند. workflow انتشار هم تا اولین tag اجرا نشده.

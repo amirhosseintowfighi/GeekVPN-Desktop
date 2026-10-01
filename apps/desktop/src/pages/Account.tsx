@@ -8,6 +8,7 @@ import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
 import { useUnread } from "../lib/useUnread";
+import { useUpdate } from "../shell/UpdateDialog";
 import { field, PaymentResult } from "./Payment";
 
 const TX_KIND: Record<string, string> = {
@@ -143,6 +144,8 @@ export function Account() {
   const { view, signOut, showSignIn } = useAuth();
   const navigate = useNavigate();
   const unread = useUnread();
+  const update = useUpdate();
+  const newVersion = update.view?.available?.version ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [money, setMoney] = useState<Wallet | null>(null);
@@ -296,6 +299,22 @@ export function Account() {
             />
             <Row icon="flag" title="گزارش مشکل" hint="یک گزارش فنی برای پشتیبانی می‌فرستد" onClick={() => navigate("/report")} />
             <Row icon="plane" title="ربات پشتیبانی" hint="گفتگو در تلگرام" onClick={() => void support.openBot().catch((e) => setError(errorText(e)))} />
+          </Group>
+          <Group label="برنامه">
+            <Row
+              icon="dl"
+              title="به‌روزرسانی برنامه"
+              hint={newVersion ? `نسخه‌ی ${faDigits(newVersion)} آماده است` : `نسخه‌ی ${faDigits(update.view?.current ?? "")} · بررسی نسخه‌ی جدید`}
+              onClick={update.openDialog}
+              trailing={
+                <span className="flex items-center gap-2">
+                  {newVersion && <Badge tone="link">جدید</Badge>}
+                  <span className="flex text-muted">
+                    <Icon name="chev" size={18} />
+                  </span>
+                </span>
+              }
+            />
           </Group>
           <Group label="حساب تلگرام">
             <Row icon="gift" title="کد معرف" hint={<span dir="ltr" className="font-num">{user.referralCode}</span>} trailing={<span />} />

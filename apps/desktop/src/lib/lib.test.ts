@@ -153,3 +153,16 @@ describe("usage", () => {
     expect(sizeFa(0)).toEqual({ value: "۰", unit: "مگ" });
   });
 });
+
+import { noteLines } from "./update";
+
+describe("update notes", () => {
+  it("reads Markdown bullets and headings as plain lines", () => {
+    expect(noteLines("## What's new\n- **Faster** scanner\n* Kill Switch fix\n\n1. Split tunnel on macOS")).toEqual([
+      "What's new",
+      "Faster scanner",
+      "Kill Switch fix",
+      "Split tunnel on macOS",
+    ]);
+  });
+});

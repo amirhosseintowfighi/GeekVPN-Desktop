@@ -40,7 +40,8 @@ fn icon(name: &str) -> Option<Image<'static>> {
     Image::from_bytes(bytes).ok()
 }
 
-pub fn setup(app: &tauri::App, data: &Persisted) -> tauri::Result<()> {
+/// `resume`: an update stopped a connection; the new version brings it back.
+pub fn setup(app: &tauri::App, data: &Persisted, resume: bool) -> tauri::Result<()> {
     let handle = app.handle();
     let toggle = MenuItem::with_id(handle, "toggle", "اتصال", true, None::<&str>)?;
     let open = MenuItem::with_id(handle, "open", "باز کردن GeekVPN", true, None::<&str>)?;
@@ -76,7 +77,7 @@ pub fn setup(app: &tauri::App, data: &Persisted) -> tauri::Result<()> {
     if !std::env::args().any(|a| a == MINIMIZED) {
         show_main(handle);
     }
-    if data.auto_connect {
+    if data.auto_connect || resume {
         let app = handle.clone();
         tauri::async_runtime::spawn(async move {
             // Let the session revalidate and the store settle first.

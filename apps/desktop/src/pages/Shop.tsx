@@ -16,6 +16,14 @@ const TIER_HINT: Record<string, string> = {
   elite: "ویژه با سرورهای اختصاصی",
 };
 
+/** What the bank's return page said, by `geekvpn://payment/result`. */
+const PAYMENT_RESULT: Record<string, { text: string; tone: string }> = {
+  ok: { text: "پرداخت تأیید شد. سرویس در «سرویس‌ها» است.", tone: "bg-ok-soft text-ok" },
+  pending: { text: "پرداخت ثبت شد و در حال بررسی است. نتیجه را در ربات تلگرام هم خبر می‌دهیم.", tone: "bg-warn-soft text-warn" },
+  failed: { text: "پرداخت انجام نشد. اگر مبلغ از حسابت کم شده، به پشتیبانی پیام بده.", tone: "bg-bad-soft text-bad" },
+  unknown: { text: "نتیجه‌ی پرداخت مشخص نشد. اگر مبلغ کم شده، به پشتیبانی پیام بده تا پیگیری شود.", tone: "bg-warn-soft text-warn" },
+};
+
 const METHOD_ICON: Record<string, IconName> = { card: "copy", crypto: "key" };
 
 export function WalletChip({ balance }: { balance: number | null }) {
@@ -36,6 +44,7 @@ export function Shop() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const renews = params.get("renew");
+  const paid = params.get("payment");
   const [data, setData] = useState<ShopView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tier, setTier] = useState<string | null>(null);
@@ -57,7 +66,16 @@ export function Shop() {
   }, []);
   useEffect(() => {
     if (auth?.user) load();
-  }, [auth?.user, load]);
+  }, [auth?.user, load, paid]);
+  // Back from the bank: its page closes the payment panel, and a paid
+  // service is fetched at once.
+  useEffect(() => {
+    if (!paid) return;
+    setStarted(null);
+    if (paid === "ok") void refresh();
+    // Once per return; `refresh` is a new function on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paid]);
 
   const grid = useMemo(() => planGrid(data?.store ?? null), [data]);
   // The service being renewed decides the tier; otherwise the first on offer.
@@ -187,6 +205,11 @@ export function Shop() {
           </Link>
         </div>
       )}
+      {paid && PAYMENT_RESULT[paid] && (
+        <div role="status" className={`rounded-[18px] px-4 py-3 text-[13px] font-bold ${PAYMENT_RESULT[paid]!.tone}`}>
+          {PAYMENT_RESULT[paid]!.text}
+        </div>
+      )}
       {loadError && (
         <div role="alert" className="glass-clear flex items-center gap-3 rounded-[18px] px-4 py-3 text-[13px]">
           <span className="flex-1">{loadError}</span>
@@ -201,7 +224,7 @@ export function Shop() {
           <CardTitle title="نوع سرویس" subtitle={TIER_HINT[tier ?? ""] ?? ""} />
           {data === null && !loadError ? (
             <span className="text-[13px] text-ink-2">در حال خواندن فروشگاه…</span>
-          ) : grid.tiers.length === 0 ? (
+          ) : loadError ? null : grid.tiers.length === 0 ? (
             <span className="text-[13px] text-ink-2">الان سرویسی برای فروش نیست. کمی بعد سر بزن یا از پشتیبانی بپرس.</span>
           ) : (
             <>
