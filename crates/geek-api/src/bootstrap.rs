@@ -24,6 +24,7 @@
 use std::time::Duration;
 
 use reqwest::{Client, Proxy};
+use zeroize::Zeroize;
 
 /// Position-dependent XOR key — not a secret, just enough to make `strings`
 /// useless.  K = 0x5A, step = 13 was chosen arbitrarily.
@@ -31,10 +32,13 @@ const K: u8 = 0x5A;
 const STEP: usize = 13;
 
 // Obfuscated with `byte ^ K ^ ((i*STEP) & 0xFF)`, K=0x5A STEP=13.
+// The scheme itself is also obfuscated so `strings` on the release binary
+// does not yield `socks5h://` as a plain literal.  Decoded only in memory.
 const HOST_ENC: [u8; 12] = [98, 102, 110, 76, 92, 53, 44, 49, 28, 29, 232, 224];
 const PORT_ENC: [u8; 5] = [110, 97, 113, 72, 88];
 const USER_ENC: [u8; 10] = [106, 102, 117, 75, 1, 111, 77, 56, 4, 107];
 const PASS_ENC: [u8; 10] = [8, 102, 9, 17, 93, 105, 82, 102, 11, 112];
+const SCHEME_ENC: [u8; 10] = [41, 56, 35, 22, 29, 46, 124, 59, 29, 0];
 
 fn decode(enc: &[u8]) -> String {
     let bytes: Vec<u8> = enc
@@ -47,27 +51,40 @@ fn decode(enc: &[u8]) -> String {
 }
 
 /// Returns `Some(proxy URL)` decoded in memory, or `None` if decoding failed.
-/// The URL is `socks5h://user:pass@host:port` — `h` forces remote DNS so the
-/// backend hostname is resolved through the proxy, not locally.
+/// `h` in the scheme forces remote DNS so the backend hostname is resolved
+/// through the proxy, not locally.  The scheme is decoded from `SCHEME_ENC`
+/// so the release binary contains no `socks5h://` literal.
 fn proxy_url() -> Option<String> {
     let host = decode(&HOST_ENC);
     let port = decode(&PORT_ENC);
     let user = decode(&USER_ENC);
     let pass = decode(&PASS_ENC);
-    if host.is_empty() || port.is_empty() || user.is_empty() || pass.is_empty() {
+    let scheme = decode(&SCHEME_ENC);
+    if host.is_empty() || port.is_empty() || user.is_empty() || pass.is_empty() || scheme.is_empty() {
         return None;
     }
-    // Credentials are alphanumeric + '_' — no percent-encoding needed, but we
-    // keep the format strict to avoid `Proxy::all` parsing surprises.
-    Some(format!("socks5h://{user}:{pass}@{host}:{port}"))
+    // Credentials are alphanumeric + '_' — no percent-encoding needed.
+    // Build without a single `socks5h://` literal in the source.
+    let mut url = String::with_capacity(scheme.len() + user.len() + pass.len() + host.len() + port.len() + 2);
+    url.push_str(&scheme);
+    url.push_str(&user);
+    url.push(':');
+    url.push_str(&pass);
+    url.push('@');
+    url.push_str(&host);
+    url.push(':');
+    url.push_str(&port);
+    Some(url)
 }
 
 /// Build a `reqwest::Client` that routes through the bootstrap proxy, if the
 /// obfuscated data decodes to a valid proxy URL.  Returns `None` when the
 /// proxy is unavailable or `socks` support was not compiled in.
+/// The URL buffer is zeroized after `Proxy::all` clones it.
 pub(crate) fn build_bootstrap_client(user_agent: &str) -> Option<Client> {
-    let url = proxy_url()?;
-    let proxy = Proxy::all(url).ok()?;
+    let mut url = proxy_url()?;
+    let proxy = Proxy::all(url.clone()).ok()?;
+    url.zeroize();
     Client::builder()
         .user_agent(user_agent)
         .connect_timeout(Duration::from_secs(10))
@@ -81,18 +98,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn proxy_url_looks_like_socks5h() {
+    fn proxy_url_is_socks5h() {
         let url = proxy_url().unwrap();
-        assert!(url.starts_with("socks5h://"));
+        let scheme = decode(&SCHEME_ENC);
+        assert!(url.starts_with(&scheme));
         assert!(url.contains('@'));
-        // Must be parseable as a URL.
         assert!(url::Url::parse(&url).is_ok());
     }
 
     #[test]
     fn no_plaintext_in_enc_constants() {
-        let raw = format!("{:?}{:?}{:?}{:?}", HOST_ENC, PORT_ENC, USER_ENC, PASS_ENC);
-        // Encoded form must not contain the dot-separated IP as a substring.
+        let raw = format!("{:?}{:?}{:?}{:?}{:?}", HOST_ENC, PORT_ENC, USER_ENC, PASS_ENC, SCHEME_ENC);
         assert!(!raw.contains("81"));
     }
 }

@@ -54,8 +54,9 @@ function susp(el: ReactNode) {
 const router = createHashRouter([
   {
     element: <AppShell />,
+    errorElement: <ErrorBoundary><div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"><span className="text-lg font-bold text-ink">مشکلی پیش آمد</span></div></ErrorBoundary>,
     children: [
-      { index: true, element: <Home /> },
+      { index: true, element: <ErrorBoundary><Home /></ErrorBoundary> },
       { path: "servers", element: susp(<ServersPage />) },
       { path: "services", element: susp(<Services />) },
       { path: "shop", element: susp(<Shop />) },
@@ -94,16 +95,20 @@ export function App() {
   // shell and without the sign-in screen (that is the main window's job).
   if (windowLabel() === "flyout") {
     return (
-      <AuthProvider>
-        <TunnelProvider>
-          <Flyout />
-        </TunnelProvider>
-      </AuthProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <TunnelProvider>
+            <Flyout />
+          </TunnelProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     );
   }
   return (
-    <AuthProvider>
-      <Gate />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Gate />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

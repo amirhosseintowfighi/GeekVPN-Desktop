@@ -1,9 +1,9 @@
 # گزارش بررسی کامل پروژه GeekVPN Desktop
 
-> **تاریخ:** ۱۴۰۴/۰۷/۱۲ (2026-10-04)  
+> **تاریخ:** ۱۴۰۴/۰۷/۱۲ (2026-10-04) — بروزرسانی `۱۴۰۴/۰۷/۱۳`  
 > **ریپو:** `amirhosseintowfighi/GeekVPN-Desktop` — شاخه `claude/laughing-johnson-x4m41g`  
 > **استک:** Tauri v2 + React 19 + TypeScript + Rust + Go (Xray-core + cfscan + sing-box)  
-> **حجم کد:** ~۱۰۷ فایل — ~۷۳۵KB سورس — ۷ کرت Rust + یک ماژول Go + یک اپ Tauri
+> **حجم کد:** ~۱۰۸ فایل — ~۷۵۰KB سورس — ۷ کرت Rust + یک ماژول Go + یک اپ Tauri + `bootstrap` SOCKS5
 
 ---
 
@@ -47,8 +47,8 @@
 | سخت‌گیری TypeScript (`strict` + `noUncheckedIndexedAccess` + ...) | ✅ بسیار سخت‌گیر |
 | روتینگ (`createHashRouter` برای Tauri) | ✅ درست |
 | استیت (`AuthContext` + `TunnelContext` با `alive` flag) | ✅ تمیز، race-safe |
-| Code splitting (`React.lazy`) | ❌ ندارد — همه صفحات ایستا import شده‌اند |
-| ErrorBoundary سراسری | ❌ ندارد |
+| Code splitting (`React.lazy`) | ✅ ۱۲ صفحه lazy شد، `Home` eager |
+| ErrorBoundary سراسری | ✅ `App` + `Home` + `Flyout` هرکدام با boundary |
 
 ### ۲.۲ دیزاین سیستم
 
@@ -78,19 +78,27 @@
 | `TitleBar` (frameless، drag region، traffic lights مک) | ✅ | `pin/min/max/close` با `opacity-85` |
 | `Sidebar` (راست، ۹۲px، glass-clear) | ✅ | بج `unread` با `faDigits` |
 | `Backdrop` (glow + رینگ‌ها) | ✅ | مطابق `Foundations` |
-| Responsive | ❌ | `absolute` + `px` ثابت، زیر ۱۱۰۰px می‌شکند |
+| Responsive | ⚠️ بهبود یافته | `Home/Settings/ServerList/Login` با `@media max-1200px` شد |
+
+### ۲.۶ Bootstrap Proxy برای لاگین اول
+
+| مورد | وضعیت | توضیح |
+|------|--------|-------|
+| `crates/geek-api/bootstrap.rs` | ✅ جدید | SOCKS5 fallback با obfuscation (XOR `K=0x5A STEP=13`) — `socks5h://` هم obfuscated، `zeroize` بعد از ساخت `Proxy` |
+| `link/start` / `link/poll` / `password/login` | ✅ | `direct-first → روی Network error یک‌بار retry از پروکسی` — auth `401` retry نمی‌شود |
+| مدل تهدید | ⚠️ صادقانه | obfuscation نه encryption — جلوی `strings` و اسکنر را می‌گیرد، ولی جلوی دیباگر را نه؛ پروکسی `rate-limited` و قابل چرخش |
 
 ### ۲.۵ مشکلات طراحی
 
 | # | مشکل | شدت | راه حل |
 |---|------|-----|--------|
-| 1 | هیچ responsive وجود ندارد | 🔴 | `@media (max-width:1200px)` برای collapsed پنل |
-| 2 | بدون `ErrorBoundary` — کرش یک صفحه کل اپ را سفید می‌کند | 🟠 | wrapper دور `Outlet` |
-| 3 | بدون `React.lazy` — باندل اولیه سنگین (۱۵ صفحه) | 🟠 | `lazy(() => import(...))` + `Suspense` |
-| 4 | `backdrop-filter: blur(24px)` روی GPU ضعیف لگ | 🟡 | `@supports` fallback مات |
-| 5 | FOUC تم دارک (فلش روشن قبل از دارک) | 🟡 | اسکریپت inline در `index.html` |
-| 6 | `Escape` در `UpdateDialog` هندل نشده | 🟡 | `FocusTrap` یکسان |
-| 7 | پوشش تست React فقط ۳ کامپوننت | 🟡 | تست `Home` (۴ استیت) + `Shop` + `Support` |
+| 1 | هیچ responsive وجود ندارد | ✅ شد | `@media (max-width:1200px)` روی ۴ صفحه اعمال شد |
+| 2 | بدون `ErrorBoundary` — کرش یک صفحه کل اپ را سفید می‌کند | ✅ شد | `App` + `Home` + `Flyout` هرکدام با boundary + `errorElement` روی router |
+| 3 | بدون `React.lazy` — باندل اولیه سنگین (۱۵ صفحه) | ✅ شد | `lazy(() => import(...))` + `Suspense` — `Home` eager |
+| 4 | `backdrop-filter: blur(24px)` روی GPU ضعیف لگ | ✅ شد | `@supports (backdrop-filter)` — بدون blur fallback مات |
+| 5 | FOUC تم دارک (فلش روشن قبل از دارک) | ✅ شد | اسکریپت inline در `index.html` از قبل بود |
+| 6 | `Escape` در `UpdateDialog` هندل نشده | ✅ شد | `keydown Escape → onClose` + `role="presentation"` |
+| 7 | پوشش تست React فقط ۳ کامپوننت | ⚠️ باقی | `Home` smoke اضافه شد — `Shop`/`Support` با `msw` هنوز مونده |
 
 ---
 
@@ -100,7 +108,7 @@
 
 | کرت | نقش | کیفیت |
 |-----|-----|--------|
-| `geek-api` | کلاینت تایپ‌شده بک‌اند GeekVPNBot | ✅ عالی — `Session` با single-flight refresh |
+| `geek-api` | کلاینت تایپ‌شده بک‌اند GeekVPNBot | ✅ عالی — `Session` با single-flight refresh + `bootstrap` SOCKS5 fallback |
 | `geek-secrets` | توکن در Keychain + `device_id` | ✅ امن — هیچ فایل متنی |
 | `geek-config` | پارس لینک + تولید کانفیگ Xray/sing-box | ✅ pure، تست‌شده (۲۰۰+ خط تست) |
 | `geek-core` | سوپروایزر `geekcore` (Go/Xray) | ✅ timeout دار، tail لاگ |
@@ -136,10 +144,11 @@
 | مورد | وضعیت | توضیح |
 |------|--------|-------|
 | `vault.rs` با `keyring` native | ✅ عالی | Credential Manager / Keychain / Secret Service |
-| `device.rs` با `HMAC-SHA256(machine-id)` | ✅ ایده درست | ولی `DEVICE_ID_KEY` هاردکد در باینری قابل استخراج است |
+| `device.rs` با `HMAC-SHA256(machine-id)` | ✅ شد | `GEEK_DEVICE_ID_KEY` از `build.rs` اگر ست باشد — بدون literal پیش‌فرض در release |
 | `Session::token()` با `Mutex` روی `await refresh()` | ✅ بهترین پیاده‌سازی دیده‌شده | تست `concurrent_callers_share_one_refresh` |
 | `wait_for_approval` با long-poll ۲۵s + backoff + `CancellationToken` | ✅ | لپ‌تاپ هنگام تغییر WiFi approval را از دست نمی‌دهد |
-| `fetch_subscription` بدون محدودیت حجم/اسکیم | ⚠️ | SSRF تئوریک — باید `https://` + `MAX_BODY` |
+| `fetch_subscription` بدون محدودیت حجم/اسکیم | ✅ شد | `https://` اجباری + `2 MiB` cap |
+| `bootstrap` برای لاگین اول پشت فیلتر | ✅ شد | `direct-first → retry via SOCKS5` روی `link/start|poll|password` |
 
 ### ۳.۵ Kill Switch
 
@@ -298,14 +307,16 @@ pnpm audit --audit-level high
 
 ### ۶.۲ ریسک‌های امنیتی
 
-| # | ریسک | شدت | راه حل |
-|---|------|-----|--------|
-| 1 | `fetch-geo.sh` بدون هش — `geoip.dat` مسموم قابل تزریق | 🔴 بالا | پین tag + `sha256sum -c` |
-| 2 | `DEVICE_ID_KEY` هاردکد — HMAC عملاً بی‌کلید | 🟠 متوسط | انتقال به `build.rs` env یا Keychain |
-| 3 | `fetch_subscription` بدون محدودیت `https` + `MAX_BODY` | 🟡 کم | whitelist + `Content-Length < 2MB` |
-| 4 | `cfscan` پرایوت — build غیرقابل تکرار | 🟡 کم | `go mod vendor` |
-| 5 | بدون `cargo audit` در CI | 🟡 کم | افزودن به `ci.yml` |
-| 6 | Kill Switch در macOS نمی‌تواند per-process فیلتر کند | 🟡 محدودیت ذاتی pf | مستند شده — اطلاع به کاربر |
+| # | ریسک | شدت | راه حل | وضعیت |
+|---|------|-----|--------|--------|
+| 1 | `fetch-geo.sh` بدون هش — `geoip.dat` مسموم قابل تزریق | 🔴 بالا | پین tag + `sha256sum -c` | ⚠️ `geo.lock.json` شد، هش‌ها باید با `--update-lock` پر شود |
+| 2 | `DEVICE_ID_KEY` هاردکد — HMAC عملاً بی‌کلید | 🟠 متوسط | انتقال به `build.rs` env یا Keychain | ✅ شد (`geek-secrets/build.rs`) |
+| 3 | `fetch_subscription` بدون محدودیت `https` + `MAX_BODY` | 🟡 کم | whitelist + `Content-Length < 2MB` | ✅ شد |
+| 4 | `cfscan` پرایوت — build غیرقابل تکرار | 🟡 کم | `go mod vendor` | ⚠️ `GOPRIVATE` شد |
+| 5 | بدون `cargo audit` در CI | 🟡 کم | افزودن به `ci.yml` | ✅ شد |
+| 6 | Kill Switch در macOS نمی‌تواند per-process فیلتر کند | 🟡 محدودیت ذاتی pf | مستند شده — اطلاع به کاربر | ✅ مستند |
+| 7 | لاگین اول پشت فیلتر (بدون VPN) | 🟠 متوسط | bootstrap SOCKS5 با obfuscation | ✅ شد (`bootstrap.rs`) |
+| 8 | `socks5h://` literal در باینری | 🟡 کم | scheme obfuscated + `zeroize` | ✅ شد |
 
 ---
 
@@ -332,19 +343,20 @@ pnpm audit --audit-level high
 
 | # | ایراد | شدت | حوزه |
 |---|-------|-----|------|
-| 1 | `fetch-geo.sh` بدون هش — مهم‌ترین حفره supply chain | 🔴 | امنیت |
-| 2 | Responsive صفر — `absolute + px ثابت` زیر ۱۱۰۰px می‌شکند | 🔴 | طراحی |
-| 3 | Updater غیرفعال (`pubkey="" endpoints=[]`) در پروداکشن | 🔴 | زیرساخت |
-| 4 | `DEVICE_ID_KEY` هاردکد | 🟠 | امنیت |
-| 5 | بدون `ErrorBoundary` + بدون `React.lazy` | 🟠 | طراحی |
-| 6 | پوشش تست React فقط ۳ کامپوننت | 🟠 | کیفیت |
-| 7 | `cfscan` پرایوت — build غیرقابل تکرار | 🟠 | زیرساخت |
-| 8 | بدون `cargo audit` / `pnpm audit` در CI | 🟡 | امنیت |
-| 9 | `blur(24px)` روی GPU ضعیف ویندوز لگ | 🟡 | طراحی |
-| 10 | FOUC تم دارک بدون اسکریپت inline | 🟡 | طراحی |
-| 11 | `store.rs` بدون `fsync` — ریسک از دست رفتن بعد قطع برق | 🟡 | بک‌اند |
-| 12 | تست فایروال و failover صفر | 🟡 | بک‌اند |
-| 13 | `bundle.linux.deb.depends: []` خالی | 🟡 | زیرساخت |
+| 1 | `fetch-geo.sh` بدون هش — مهم‌ترین حفره supply chain | ⚠️ نیمه‌کاره | `geo.lock.json` + `fetch-geo.sh` شد، هش‌ها هنوز باید با `--update-lock` پر شود |
+| 2 | Responsive صفر — `absolute + px ثابت` زیر ۱۱۰۰px می‌شکند | ✅ شد | `Home/Settings/ServerList/Login` با `@media` |
+| 3 | Updater غیرفعال (`pubkey="" endpoints=[]`) در پروداکشن | 🔴 باقی | نیاز به `tauri signer generate` + Secrets — اقدام دستی |
+| 4 | `DEVICE_ID_KEY` هاردکد | ✅ شد | `crates/geek-secrets/build.rs` + `GEEK_DEVICE_ID_KEY` |
+| 5 | بدون `ErrorBoundary` + بدون `React.lazy` | ✅ شد | `lazy` ۱۲ صفحه + `ErrorBoundary` روی `App/Home/Flyout` |
+| 6 | پوشش تست React فقط ۳ کامپوننت | ⚠️ نیمه | `Home` اضافه شد — `Shop/Support` با `msw` هنوز مونده |
+| 7 | `cfscan` پرایوت — build غیرقابل تکرار | ⚠️ باقی | CI الان `GOPRIVATE` دارد، ولی `go mod vendor` هنوز نه |
+| 8 | بدون `cargo audit` / `pnpm audit` در CI | ✅ شد | `ci.yml` اضافه شد |
+| 9 | `blur(24px)` روی GPU ضعیف ویندوز لگ | ✅ شد | `@supports (backdrop-filter)` fallback |
+| 10 | FOUC تم دارک بدون اسکریپت inline | ✅ شد | inline script از قبل بود |
+| 11 | `store.rs` بدون `fsync` — ریسک از دست رفتن بعد قطع برق | ✅ شد | `fsync` + `0600` |
+| 12 | تست فایروال و failover صفر | ⚠️ باقی | — |
+| 13 | `bundle.linux.deb.depends: []` خالی | ✅ شد | `libwebkit2gtk-4.1-0 | 4.0-37` |
+| 14 | لاگین اول پشت فیلتر بدون VPN | ✅ شد | `bootstrap` SOCKS5 با obfuscation — `direct-first → retry` |
 
 ---
 
@@ -354,7 +366,7 @@ pnpm audit --audit-level high
 
 | # | کار | فایل | زمان |
 |---|-----|------|------|
-| 1 | پین هش برای `fetch-geo.sh` — `geo.lock.json` با `url, tag, sha256` + `sha256sum -c` | `scripts/fetch-geo.sh` | ۱ ساعت |
+| 1 | پین هش برای `fetch-geo.sh` — `scripts/fetch-geo.sh --update-lock` تا `sha256`‌ها پر شود + کامیت | `scripts/fetch-geo.sh` | ۱۰ دقیقه (با اینترنت) |
 | 2 | پر کردن `updater.pubkey` و تست یک release آزمایشی (و رد بسته دست‌کاری‌شده) | `tauri.conf.json` + Secrets | ۲ ساعت |
 | 3 | `go mod vendor` یا `replace` برای `cfscan` + CI بدون دسترسی پرایوت | `core/geekcore/go.mod` | ۱ ساعت |
 
@@ -362,28 +374,28 @@ pnpm audit --audit-level high
 
 | # | کار | فایل | زمان |
 |---|-----|------|------|
-| 4 | `React.lazy` برای صفحات + `ErrorBoundary` دور `Outlet` + `Suspense` | `apps/desktop/src/App.tsx` | ۲ ساعت |
-| 5 | انتقال `DEVICE_ID_KEY` به `build.rs` env | `crates/geek-secrets/device.rs` | ۱ ساعت |
-| 6 | `store.rs: save()` با `fsync` + `MoveFileExW` اتمیک در ویندوز | `crates/.../store.rs` | ۱ ساعت |
-| 7 | محدود کردن `fetch_subscription` به `https://` + `MAX_BODY 2MB` | `crates/geek-api/client.rs` | ۳۰ دقیقه |
-| 8 | افزودن `cargo audit` + `pnpm audit` به CI | `.github/workflows/ci.yml` | ۳۰ دقیقه |
+| 4 | ~~`React.lazy` برای صفحات + `ErrorBoundary` دور `Outlet` + `Suspense`~~ ✅ شد | `apps/desktop/src/App.tsx` | — |
+| 5 | ~~انتقال `DEVICE_ID_KEY` به `build.rs` env~~ ✅ شد | `crates/geek-secrets/build.rs` | — |
+| 6 | ~~`store.rs: save()` با `fsync` + `MoveFileExW` اتمیک در ویندوز~~ ✅ شد | `apps/desktop/src-tauri/src/store.rs` | — |
+| 7 | ~~محدود کردن `fetch_subscription` به `https://` + `MAX_BODY 2MB`~~ ✅ شد | `crates/geek-api/client.rs` | — |
+| 8 | ~~افزودن `cargo audit` + `pnpm audit` به CI~~ ✅ شد | `.github/workflows/ci.yml` | — |
 
 ### 🟡 اولویت P2 — ماه اول
 
 | # | کار | فایل | زمان |
 |---|-----|------|------|
-| 9 | اسکریپت inline تم در `index.html` برای جلوگیری از FOUC | `apps/desktop/index.html` | ۲۰ دقیقه |
-| 10 | `FocusTrap` برای `UpdateDialog` + `Flyout` + هندل `Escape` | `apps/desktop/src/shell/` | ۱ ساعت |
-| 11 | `@media (max-width:1200px)` برای `Home` و `Settings` | `apps/desktop/src/pages/*.tsx` | ۲ ساعت |
+| 9 | ~~اسکریپت inline تم در `index.html`~~ ✅ از قبل بود | `apps/desktop/index.html` | — |
+| 10 | ~~`FocusTrap` برای `UpdateDialog` + `Flyout` + هندل `Escape`~~ ✅ `Escape` شد | `apps/desktop/src/shell/` | — |
+| 11 | ~~`@media (max-width:1200px)` برای `Home` و `Settings`~~ ✅ شد | `apps/desktop/src/pages/*.tsx` | — |
 | 12 | تست‌های `Home` (۴ استیت) + `Shop` + `Support` با `vitest + msw` | `apps/desktop/src/pages/*.test.tsx` | ۴ ساعت |
 | 13 | تست فایروال (mock) + تست `FailoverPolicy` با زمان مجازی | `crates/geek-netplat`, `crates/geek-core` | ۳ ساعت |
-| 14 | پین `actions/*` روی SHA + `dependabot.yml` | `.github/workflows/*.yml` | ۱ ساعت |
+| 14 | ~~پین `actions/*` روی SHA + `dependabot.yml`~~ ✅ `dependabot.yml` اضافه شد | `.github/workflows/*.yml` | — |
 
 ### 🔵 اولویت P3 — بهبود مستمر
 
 | # | کار | زمان |
 |---|-----|------|
-| 15 | `@supports not (backdrop-filter: blur())` fallback مات | ۳۰ دقیقه |
+| 15 | ~~`@supports not (backdrop-filter: blur())` fallback مات~~ ✅ شد | — |
 | 16 | اسکرین‌شات رگرسیون `gen.py` ↔ `playwright` | ۳ ساعت |
 | 17 | `docs/DEV.md` + `docs/SECURITY.md` جدا | ۲ ساعت |
 | 18 | `justfile` برای `build-geekcore + build-singbox + build-helper + pnpm install` یک‌خطی | ۳۰ دقیقه |
@@ -397,25 +409,25 @@ pnpm audit --audit-level high
 | محور | امتیاز | توضیح |
 |------|:------:|-------|
 | 🏗️ معماری و طراحی سیستم | ⭐⭐⭐⭐⭐ | جداسازی helper/TUN/sing-box/geekcore در حد Mullvad |
-| 🎨 طراحی و UI/UX | ⭐⭐⭐⭐☆ | منسجم و زیبا، ولی ریسپانسیو صفر |
-| ⚙️ بک‌اند و هسته اتصال | ⭐⭐⭐⭐⭐ | تمیزترین کد Rust دیده‌شده، مدیریت توکن حرفه‌ای |
-| 🚀 کارایی | ⭐⭐⭐⭐☆ | بهینه برای حجم، تست موازی، ولی blur روی GPU ضعیف |
-| 🔒 امنیت | ⭐⭐⭐☆☆ | هسته امن، ولی geo بدون هش + کلید هاردکد |
-| 📚 مستندات | ⭐⭐⭐⭐☆ | ARCH بی‌نظیر ولی تک‌فایلی |
-| 🔧 DX و اسکریپت‌ها | ⭐⭐⭐⭐☆ | شفاف و reproducible، بدون `just/make` |
-| 🔄 CI/CD | ⭐⭐⭐⭐☆ | ماتریس کامل، بدون audit و provenance |
-| 🧪 تست | ⭐⭐⭐☆☆ | Rust عالی، React کم |
-| **میانگین کل** | **⭐⭐⭐⭐☆ (۴.۰ / ۵)** | **حرفه‌ای — با ۳ اقدام فوری production-ready** |
+| 🎨 طراحی و UI/UX | ⭐⭐⭐⭐☆ | منسجم و زیبا، responsive نیمه (باقی <1100px) |
+| ⚙️ بک‌اند و هسته اتصال | ⭐⭐⭐⭐⭐ | تمیزترین کد Rust — bootstrap SOCKS5 هم اضافه شد |
+| 🚀 کارایی | ⭐⭐⭐⭐☆ | بهینه برای حجم، lazy، blur با fallback |
+| 🔒 امنیت | ⭐⭐⭐⭐☆ | هسته امن — `fetch_subscription`/`DEVICE_ID_KEY`/bootstrap شد، فقط `geo` هش و `updater` باقی |
+| 📚 مستندات | ⭐⭐⭐⭐☆ | ARCH بی‌نظیر + این گزارش به‌روز شد |
+| 🔧 DX و اسکریپت‌ها | ⭐⭐⭐⭐☆ | شفاف، `dependabot.yml`، بدون `just/make` |
+| 🔄 CI/CD | ⭐⭐⭐⭐☆ | ماتریس کامل + `cargo/pnpm audit` + `GOPRIVATE` |
+| 🧪 تست | ⭐⭐⭐☆☆ | Rust عالی، `Home` smoke اضافه — React هنوز کم |
+| **میانگین کل** | **⭐⭐⭐⭐☆ (۴.۲ / ۵)** | **تقریباً production-ready — فقط `geo` هش + `updater` دستی** |
 
 ---
 
-### سه اقدام فوری برای Production-Ready شدن
+### سه اقدام فوری برای Production-Ready شدن (۱۴۰۴/۰۷/۱۳ — بیشترش انجام شد)
 
-> ۱. **پین هش geo** — `fetch-geo.sh` را امن کن  
-> ۲. **فعال‌سازی updater** — `pubkey` را پر کن و یک release آزمایشی تست کن  
-> ۳. ** audit در CI** — `cargo audit` + `pnpm audit` اضافه کن
+> ۱. **پین هش geo** — `geo.lock.json` ساخته شد، فقط `scripts/fetch-geo.sh --update-lock` با اینترنت + کامیتِ هش‌ها باقی  
+> ۲. **فعال‌سازی updater** — `pubkey` را پر کن و یک release آزمایشی تست کن (نیاز به `tauri signer generate` دستی)  
+> ۳. ~~**audit در CI**~~ ✅ شد — `cargo audit` + `pnpm audit` در `ci.yml`
 
-بعد از این سه، پروژه آماده انتشار نسخه `v1.0.0` است.
+بعد از ۱ و ۲، پروژه آماده انتشار نسخه `v1.0.0` است.
 
 ---
 
