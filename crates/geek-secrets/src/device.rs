@@ -9,8 +9,10 @@ use sha2::Sha256;
 /// `build.rs` injects it as compile-time env so the literal never appears
 /// in the binary when overridden.
 fn device_id_key() -> &'static [u8] {
-    const KEY: &str = option_env!("GEEK_DEVICE_ID_KEY").unwrap_or("geekvpn-desktop/device-id/v1");
-    KEY.as_bytes()
+    match option_env!("GEEK_DEVICE_ID_KEY") {
+        Some(v) => v.as_bytes(),
+        None => b"geekvpn-desktop/device-id/v1",
+    }
 }
 
 /// The server's limits (`app_link_login._MAX_DEVICE_ID`, `_MAX_DEVICE_NAME`).
