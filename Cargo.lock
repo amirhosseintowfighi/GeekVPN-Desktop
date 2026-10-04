@@ -1566,7 +1566,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "windows-service",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1578,7 +1578,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1588,7 +1588,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
  "winreg 0.55.0",
 ]
 
