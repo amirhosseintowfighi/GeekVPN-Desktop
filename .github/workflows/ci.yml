@@ -96,7 +96,7 @@ jobs:
       - run: cargo test --workspace
       # Unsigned until the signing secrets exist (docs/ARCHITECTURE.md §8).
       - run: pnpm -C apps/desktop tauri build ${{ matrix.args }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: geekvpn-${{ matrix.name }}
           path: |
