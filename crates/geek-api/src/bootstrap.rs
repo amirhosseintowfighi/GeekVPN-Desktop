@@ -83,7 +83,7 @@ fn proxy_url() -> Option<String> {
 /// The URL buffer is zeroized after `Proxy::all` clones it.
 pub(crate) fn build_bootstrap_client(user_agent: &str) -> Option<Client> {
     let mut url = proxy_url()?;
-    let proxy = Proxy::all(url.clone()).ok()?;
+    let proxy = Proxy::all(url.as_str()).ok()?;
     url.zeroize();
     Client::builder()
         .user_agent(user_agent)
