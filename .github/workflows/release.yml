@@ -133,7 +133,7 @@ jobs:
           node scripts/release-config.mjs "$version" > "$RUNNER_TEMP/release.conf.json"
           cat "$RUNNER_TEMP/release.conf.json"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
