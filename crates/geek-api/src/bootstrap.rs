@@ -46,8 +46,8 @@ fn decode(enc: &[u8]) -> String {
         .enumerate()
         .map(|(i, &b)| b ^ K ^ (((i * STEP) & 0xFF) as u8))
         .collect();
-    // All four fields are ASCII, so UTF-8 is guaranteed.
-    String::from_utf8(bytes).unwrap_or_default()
+    // All four fields are ASCII, so from_utf8 is guaranteed; lossy avoids unwrap clippy lint.
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// Returns `Some(proxy URL)` decoded in memory, or `None` if decoding failed.
