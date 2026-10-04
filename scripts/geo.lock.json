@@ -1,7 +1,7 @@
 ﻿{
   "v2ray_rules_dat": {
-    "tag": "20250914",
-    "url": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/20250914"
+    "tag": "202610032254",
+    "url": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/202610032254"
   },
   "geoip_private": {
     "url": "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/geoip-only-cn-private.dat"
