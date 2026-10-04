@@ -368,7 +368,9 @@ impl Tunnel {
         let mut slot = self.proxy.lock().await;
         // Reconnecting: the saved snapshot is still the user's, keep it.
         if let Some(prev) = slot.as_ref() {
-            let _ = restore_system_proxy(prev);
+            if let Err(e) = restore_system_proxy(prev) {
+                eprintln!("geekvpn: restore_system_proxy (reconnect) failed: {e}");
+            }
         }
         let snap = match apply_system_proxy(&spec) {
             Ok(s) => s,
@@ -382,6 +384,11 @@ impl Tunnel {
         };
         if let Ok(bytes) = serde_json::to_vec(&snap) {
             let _ = std::fs::write(&self.snapshot_file, bytes);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&self.snapshot_file, std::fs::Permissions::from_mode(0o600));
+            }
         }
         *slot = Some(snap);
         Ok(None)
@@ -389,7 +396,9 @@ impl Tunnel {
 
     async fn release_system_proxy(&self) {
         if let Some(snap) = self.proxy.lock().await.take() {
-            let _ = restore_system_proxy(&snap);
+            if let Err(e) = restore_system_proxy(&snap) {
+                eprintln!("geekvpn: restore_system_proxy failed: {e}");
+            }
         }
         let _ = std::fs::remove_file(&self.snapshot_file);
     }
@@ -406,7 +415,9 @@ impl Tunnel {
             self.helper.lock().await.take();
             return;
         }
-        let _ = h.call::<serde_json::Value>(Request::TunStop, Duration::from_secs(10)).await;
+        if let Err(e) = h.call::<serde_json::Value>(Request::TunStop, Duration::from_secs(10)).await {
+            eprintln!("geekvpn: TunStop failed: {e}");
+        }
     }
 
     pub async fn disconnect(&self, app: &AppHandle) {

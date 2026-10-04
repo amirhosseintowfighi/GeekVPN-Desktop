@@ -11,7 +11,7 @@ export function Sidebar() {
   return (
     <aside
       aria-label="ناوبری اصلی"
-      className="glass-clear absolute bottom-3.5 right-3.5 top-3.5 z-10 flex w-[92px] flex-col items-center gap-1.5 overflow-y-auto rounded-[26px] py-3"
+      className="glass-clear absolute bottom-3.5 right-3.5 top-3.5 z-10 flex w-[92px] flex-col items-center gap-1.5 overflow-y-auto rounded-[26px] py-3 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]"
     >
       <span className="mb-1.5">
         <Logo size={40} color="#FFFFFF" title="GeekVPN" />

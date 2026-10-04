@@ -195,7 +195,11 @@ func (e *engine) testDelays(t delayTest) []delayResult {
 	if n <= 0 {
 		n = 8
 	}
+	if n > len(t.Items) {
+		n = len(t.Items)
+	}
 	results := make([]delayResult, len(t.Items))
+	var mu sync.Mutex
 	sem := make(chan struct{}, n)
 	var wg sync.WaitGroup
 	for i, item := range t.Items {
@@ -210,7 +214,9 @@ func (e *engine) testDelays(t delayTest) []delayResult {
 			} else {
 				r.Ms = ms
 			}
+			mu.Lock()
 			results[i] = r
+			mu.Unlock()
 			e.out.emit("test.result", r)
 		}(i, item.ID, item.Config)
 	}
@@ -249,7 +255,7 @@ func measure(ctx context.Context, inst *core.Instance, url string) (int64, error
 		},
 	}
 	defer tr.CloseIdleConnections()
-	client := &http.Client{Transport: tr, Timeout: 12 * time.Second}
+	client := &http.Client{Transport: tr}
 
 	best := int64(-1)
 	var lastErr error

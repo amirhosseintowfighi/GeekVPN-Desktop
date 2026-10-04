@@ -96,12 +96,27 @@ impl ApiClient {
 
     /// A subscription's body: the panel's share links, usually base64. It is
     /// public by URL (the token is in it), so no Bearer goes along.
+    /// Only https:// is allowed and the body is capped at 2 MiB.
     pub async fn fetch_subscription(&self, url: &str) -> Result<String, ApiError> {
+        let parsed = Url::parse(url).map_err(|e| ApiError::Decode(format!("bad url: {e}")))?;
+        if parsed.scheme() != "https" {
+            return Err(ApiError::Decode("subscription url must be https://".into()));
+        }
         let resp = self.http.get(url).timeout(REQUEST_TIMEOUT).send().await?;
         if !resp.status().is_success() {
             return Err(ApiError::Http { status: resp.status().as_u16(), title: "subscription".into(), message_fa: None });
         }
-        resp.text().await.map_err(|e| ApiError::Decode(e.to_string()))
+        // Reject obviously too-large bodies early via Content-Length.
+        if let Some(len) = resp.content_length() {
+            if len > 2 * 1024 * 1024 {
+                return Err(ApiError::Decode("subscription too large".into()));
+            }
+        }
+        let bytes = resp.bytes().await.map_err(|e| ApiError::Decode(e.to_string()))?;
+        if bytes.len() > 2 * 1024 * 1024 {
+            return Err(ApiError::Decode("subscription too large".into()));
+        }
+        String::from_utf8(bytes.to_vec()).map_err(|e| ApiError::Decode(e.to_string()))
     }
 
     /// Any Mini App route (`/api/miniapp/...`) over the app's Bearer token.

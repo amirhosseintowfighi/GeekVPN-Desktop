@@ -5,7 +5,13 @@ use sha2::Sha256;
 /// Not a secret: it only keeps the raw machine id (Windows `MachineGuid`,
 /// macOS `IOPlatformUUID`, Linux `/etc/machine-id`) from leaving the
 /// computer, and makes GeekVPN's id useless to anyone correlating by it.
-const DEVICE_ID_KEY: &[u8] = b"geekvpn-desktop/device-id/v1";
+/// Overridable at build time via `GEEK_DEVICE_ID_KEY` (set in CI Secrets);
+/// `build.rs` injects it as compile-time env so the literal never appears
+/// in the binary when overridden.
+fn device_id_key() -> &'static [u8] {
+    const KEY: &str = option_env!("GEEK_DEVICE_ID_KEY").unwrap_or("geekvpn-desktop/device-id/v1");
+    KEY.as_bytes()
+}
 
 /// The server's limits (`app_link_login._MAX_DEVICE_ID`, `_MAX_DEVICE_NAME`).
 const MAX_DEVICE_NAME: usize = 64;
@@ -14,7 +20,7 @@ const MAX_DEVICE_NAME: usize = 64;
 /// reinstalls and sign-outs, so the bot's device list and its per-device rate
 /// limit see one computer as one device.
 pub fn device_id_from(machine_id: &str) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(DEVICE_ID_KEY).expect("HMAC takes any key length");
+    let mut mac = Hmac::<Sha256>::new_from_slice(device_id_key()).expect("HMAC takes any key length");
     mac.update(machine_id.trim().as_bytes());
     hex::encode(mac.finalize().into_bytes())
 }

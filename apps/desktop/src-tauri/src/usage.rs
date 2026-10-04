@@ -92,8 +92,11 @@ impl Usage {
     fn save(&self, b: &mut Book) {
         if let Ok(json) = serde_json::to_vec(&b.days) {
             let tmp = self.path.with_extension("tmp");
-            if std::fs::write(&tmp, json).is_ok() && std::fs::rename(&tmp, &self.path).is_ok() {
-                b.dirty = false;
+            if let Ok(mut f) = std::fs::File::create(&tmp) {
+                use std::io::Write;
+                if f.write_all(&json).is_ok() && f.sync_all().is_ok() && std::fs::rename(&tmp, &self.path).is_ok() {
+                    b.dirty = false;
+                }
             }
         }
         b.saved = Some(Instant::now());

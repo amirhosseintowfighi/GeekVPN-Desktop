@@ -124,7 +124,7 @@ export function Settings() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
       <PageHeader title="تنظیمات" subtitle="تغییرهای اتصال از اتصال بعدی اعمال می‌شوند" />
-      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto pb-2">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto pb-2 max-[1200px]:flex-col">
         <div className="flex min-w-0 flex-1 basis-0 flex-col gap-3.5">
           <Card padding={18}>
             <CardTitle title="حالت اتصال" subtitle={connected ? "با اتصال بعدی اعمال می‌شود" : undefined} />
@@ -206,7 +206,7 @@ export function Settings() {
           )}
         </div>
 
-        <div className="flex w-[300px] shrink-0 flex-col gap-3.5">
+        <div className="flex w-[300px] shrink-0 flex-col gap-3.5 max-[1200px]:w-full">
           <Card>
             <CardTitle title="ظاهر" subtitle="هماهنگ با سیستم، تم ویندوز، مک یا لینوکس را دنبال می‌کند" />
             <Segmented label="تم برنامه" options={THEMES} value={theme} onChange={pick} height={42} />

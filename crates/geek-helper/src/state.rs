@@ -24,13 +24,16 @@ impl StateFile {
         std::fs::read(&self.0).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
     }
 
-    /// Atomic (temp file, then rename): a half-written state after a power
-    /// cut would lose a strict kill switch.
+    /// Atomic (temp file, fsync, then rename): a half-written state after a
+    /// power cut would lose a strict kill switch.
     pub fn save(&self, s: &State) {
         let tmp = self.0.with_extension("json.tmp");
         if let Ok(bytes) = serde_json::to_vec(s) {
-            if std::fs::write(&tmp, bytes).is_ok() {
-                let _ = std::fs::rename(&tmp, &self.0);
+            if let Ok(mut f) = std::fs::File::create(&tmp) {
+                use std::io::Write;
+                if f.write_all(&bytes).is_ok() && f.sync_all().is_ok() {
+                    let _ = std::fs::rename(&tmp, &self.0);
+                }
             }
         }
     }

@@ -24,6 +24,11 @@ function megabytes(n: number): string {
 
 /** Desktop-Update: the new version, its notes, the download, and the restart. */
 function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; checking: boolean; error: string | null; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const [progress, setProgress] = useState<{ downloaded: number; total: number | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -47,7 +52,7 @@ function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; c
   const canClose = !a?.required && !busy;
 
   return (
-    <div className="absolute inset-0 z-40 flex items-start justify-center bg-[rgba(3,27,51,0.6)] pt-[150px]" onClick={() => canClose && onClose()}>
+    <div className="absolute inset-0 z-40 flex items-start justify-center bg-[rgba(3,27,51,0.6)] pt-[150px]" onClick={() => canClose && onClose()} role="presentation">
       <div
         role="dialog"
         aria-modal="true"

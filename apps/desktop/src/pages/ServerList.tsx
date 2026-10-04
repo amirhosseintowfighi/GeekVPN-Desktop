@@ -204,7 +204,7 @@ export function ServersPage() {
         ))}
       </div>
       {error && <span className="text-[13px]">{error}</span>}
-      <div className="flex min-h-0 flex-1 gap-4">
+      <div className="flex min-h-0 flex-1 gap-4 max-[1200px]:flex-col">
       <section className="glass-milk flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[26px]">
         <div className="grid grid-cols-[44px_minmax(0,1.6fr)_minmax(0,1.3fr)_110px_120px_44px] gap-2.5 border-b border-hair px-4 py-3 text-xs font-bold text-ink-2">
           <span />
@@ -255,7 +255,7 @@ export function ServersPage() {
           })}
         </div>
       </section>
-      <div className="flex w-[300px] shrink-0 flex-col gap-4">
+      <div className="flex w-[300px] shrink-0 flex-col gap-4 max-[1200px]:w-full max-[1200px]:flex-row max-[1200px]:flex-wrap [&>*]:max-[1200px]:flex-1">
         <AutoCard />
         <OptimizerCard />
       </div>

@@ -112,7 +112,7 @@ export function Home() {
 
   return (
     <>
-      <div className="flex min-w-0 flex-1 basis-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-1 basis-0 flex-col gap-4 max-[1200px]:gap-3">
         <header className="flex items-center gap-3">
           <div className="flex flex-1 flex-col gap-0.5">
             <span dir="ltr" className="text-right font-num text-[22px] font-bold tracking-[-0.5px]">
@@ -134,7 +134,7 @@ export function Home() {
           </Link>
         </header>
 
-        <div className="flex flex-1 items-center gap-9 px-3">
+        <div className="flex flex-1 items-center gap-9 px-3 max-[1200px]:flex-col max-[1200px]:items-stretch max-[1200px]:gap-6">
           <div className="relative flex h-[280px] w-[280px] shrink-0 items-center justify-center">
             <svg aria-hidden="true" width="280" height="280" viewBox="0 0 280 280" className="absolute inset-0">
               <circle cx="140" cy="140" r="128" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="6" />

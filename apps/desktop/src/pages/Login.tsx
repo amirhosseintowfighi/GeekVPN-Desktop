@@ -54,7 +54,7 @@ export function Login() {
           }}
         />
       ) : (
-        <div className="absolute inset-x-[72px] bottom-10 top-[70px] flex items-center gap-12">
+        <div className="absolute inset-x-[72px] bottom-10 top-[70px] flex items-center gap-12 max-[1100px]:inset-x-6 max-[1100px]:gap-6">
           <div className="flex flex-1 flex-col gap-6">
             <div className="relative flex h-[240px] w-[240px] items-center justify-center">
               <svg aria-hidden="true" width="240" height="240" viewBox="0 0 240 240" className="absolute inset-0">

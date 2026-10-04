@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { errorText } from "./auth";
 import { useAuth } from "./AuthContext";
 import { windowLabel } from "./desktop";
@@ -73,7 +73,7 @@ export function TunnelProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value: TunnelContextValue = {
+  const memoizedValue: TunnelContextValue = useMemo(() => ({
     view,
     state,
     stats: history.at(-1) ?? null,
@@ -116,8 +116,8 @@ export function TunnelProvider({ children }: { children: ReactNode }) {
       const v = await guard(() => servers.set(s));
       if (v) setView(v);
     },
-  };
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  }), [view, state, history, testing, busy, error]);
+  return <Ctx.Provider value={memoizedValue}>{children}</Ctx.Provider>;
 }
 
 export function useTunnel(): TunnelContextValue {
