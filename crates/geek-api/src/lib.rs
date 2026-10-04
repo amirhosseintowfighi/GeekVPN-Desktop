@@ -4,6 +4,7 @@
 //! the device, then the app is an ordinary Bearer client that rotates its
 //! tokens at `/api/v1/auth/refresh` and calls the Mini App's routes.
 
+mod bootstrap;
 mod client;
 mod error;
 mod login;

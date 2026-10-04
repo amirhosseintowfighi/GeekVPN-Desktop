@@ -18,9 +18,18 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// A thin, typed client for the endpoints the desktop app uses. It holds no
 /// tokens: `Session` decides which token goes with which call.
+///
+/// `bootstrap` is an optional SOCKS5 proxy **only for the first sign-in**
+/// (direct-first, retry-via-proxy). After sign-in the VPN itself carries
+/// traffic, so the bootstrap is never used again.
 #[derive(Clone)]
 pub struct ApiClient {
     http: reqwest::Client,
+    /// `Some` only when the obfuscated bootstrap proxy decoded and
+    /// `Client::builder().proxy(...)` succeeded. `None` on machines where
+    /// `socks` was not compiled or the data was corrupt — then sign-in is
+    /// direct-only.
+    bootstrap: Option<reqwest::Client>,
     base: Url,
 }
 
@@ -31,7 +40,15 @@ impl ApiClient {
             .connect_timeout(Duration::from_secs(10))
             .build()
             .map_err(|e| ApiError::Network(e.to_string()))?;
-        Ok(Self { http, base })
+        let bootstrap = crate::bootstrap::build_bootstrap_client(user_agent);
+        Ok(Self { http, bootstrap, base })
+    }
+
+    /// For tests: inject a bootstrap client. Production uses `bootstrap.rs`.
+    #[cfg(test)]
+    pub fn with_bootstrap(mut self, client: reqwest::Client) -> Self {
+        self.bootstrap = Some(client);
+        self
     }
 
     pub(crate) fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ApiError> {
@@ -39,34 +56,77 @@ impl ApiClient {
         Ok(self.http.request(method, url).timeout(REQUEST_TIMEOUT))
     }
 
+    /// Same URL but via the bootstrap SOCKS5 proxy, if available.
+    fn bootstrap_request(&self, method: Method, path: &str) -> Option<RequestBuilder> {
+        let url = self.base.join(path).ok()?;
+        let client = self.bootstrap.as_ref()?;
+        let timeout = if path.contains("link/poll") { POLL_TIMEOUT } else { REQUEST_TIMEOUT };
+        Some(client.request(method, url).timeout(timeout))
+    }
+
     // -- sign-in ------------------------------------------------------------
+    // Each sign-in endpoint follows direct-first, bootstrap-on-network-error.
+    // RequestBuilder is not Clone, so retries rebuild the request from the same
+    // arguments rather than cloning.
 
     pub async fn link_start(&self, device: &DeviceInfo) -> Result<LinkStart, ApiError> {
-        let req = self.request(Method::POST, "api/app/auth/link/start")?.json(device);
-        send(req, Auth::None).await
+        let direct = self.request(Method::POST, "api/app/auth/link/start")?.json(device);
+        match send(direct, Auth::None).await {
+            Err(ApiError::Network(_)) => {
+                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/link/start") else {
+                    return Err(ApiError::Network("به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن.".into()));
+                };
+                send(retry.json(device), Auth::None).await
+            }
+            other => other,
+        }
     }
 
     /// One poll. With `wait` the server holds the request until the customer
     /// decides or 25 seconds pass.
     pub async fn link_poll(&self, poll_token: &str, wait: bool) -> Result<LinkPoll, ApiError> {
-        let req = self
+        let direct = self
             .request(Method::POST, "api/app/auth/link/poll")?
             .timeout(POLL_TIMEOUT)
             .json(&PollRequest { poll_token, wait });
-        send(req, Auth::None).await
+        match send(direct, Auth::None).await {
+            Err(ApiError::Network(_)) => {
+                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/link/poll") else {
+                    return Err(ApiError::Network("به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن.".into()));
+                };
+                let retry = retry.timeout(POLL_TIMEOUT).json(&PollRequest { poll_token, wait });
+                send(retry, Auth::None).await
+            }
+            other => other,
+        }
     }
 
     /// The username and password set in the bot (profile → «ورود به اپ با نام
     /// کاربری»). A wrong pair is a 401 whose Persian message says so.
     pub async fn password_login(&self, username: &str, password: &str, device: &DeviceInfo) -> Result<SignedIn, ApiError> {
-        let req = self.request(Method::POST, "api/app/auth/password")?.json(&PasswordRequest {
+        let direct = self.request(Method::POST, "api/app/auth/password")?.json(&PasswordRequest {
             username,
             password,
             device_name: &device.device_name,
             platform: &device.platform,
             app_version: &device.app_version,
         });
-        send(req, Auth::None).await
+        match send(direct, Auth::None).await {
+            Err(ApiError::Network(_)) => {
+                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/password") else {
+                    return Err(ApiError::Network("به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن.".into()));
+                };
+                let retry = retry.json(&PasswordRequest {
+                    username,
+                    password,
+                    device_name: &device.device_name,
+                    platform: &device.platform,
+                    app_version: &device.app_version,
+                });
+                send(retry, Auth::None).await
+            }
+            other => other,
+        }
     }
 
     // -- the session --------------------------------------------------------
