@@ -14,7 +14,7 @@ jobs:
     name: UI (typecheck, tests, build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -46,7 +46,7 @@ jobs:
             args: "--target universal-apple-darwin --bundles dmg"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Linux build dependencies
         if: matrix.name == 'linux'
         run: |
