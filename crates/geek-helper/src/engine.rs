@@ -13,11 +13,6 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::paths::{self, TUN_NAME};
 
-#[cfg(not(windows))]
-const TAIL: usize = 40;
-#[cfg(not(windows))]
-const START_TIMEOUT: Duration = Duration::from_secs(15);
-
 /// A running TUN engine. Dropping it without `stop` still kills the process.
 pub struct Running {
     pub info: TunInfo,
@@ -44,6 +39,9 @@ mod unix {
     use std::net::TcpListener;
     use std::process::Stdio;
     use std::time::{Duration, Instant};
+
+    const TAIL: usize = 40;
+    const START_TIMEOUT: Duration = Duration::from_secs(15);
 
     use geek_config::{tun_config, TunHost, TunSpec};
     use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};

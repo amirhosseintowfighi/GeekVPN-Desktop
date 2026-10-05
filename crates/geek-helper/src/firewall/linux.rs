@@ -57,6 +57,7 @@ fn nft(script: &str) -> Result<(), String> {
 }
 
 impl Firewall {
+    #[allow(dead_code)]
     pub fn engage(&mut self, ks: &KillSwitch, _tun: Option<&str>, _engine: &Path) -> Result<(), String> {
         self.engage_with_apps(ks, _tun, _engine, &[])
     }

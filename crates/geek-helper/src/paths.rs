@@ -15,10 +15,12 @@ pub const WINTUN_FILE: &str = "wintun.dll";
 
 /// sing-box sits next to the helper, in the install directory.
 /// On Windows the TUN engine is hev (see `hev_binary`); sing-box is not used.
+#[cfg(windows)]
 pub fn engine_binary() -> PathBuf {
-    if cfg!(windows) {
-        return hev_binary();
-    }
+    hev_binary()
+}
+#[cfg(not(windows))]
+pub fn engine_binary() -> PathBuf {
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join(ENGINE_FILE)))

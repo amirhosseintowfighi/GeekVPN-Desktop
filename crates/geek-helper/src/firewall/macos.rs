@@ -58,6 +58,7 @@ fn pfctl(args: &[&str], stdin: Option<&str>) -> Result<String, String> {
 }
 
 impl Firewall {
+    #[allow(dead_code)]
     pub fn engage(&mut self, ks: &KillSwitch, tun: Option<&str>, _engine: &Path) -> Result<(), String> {
         self.engage_with_apps(ks, tun, _engine, &[])
     }
