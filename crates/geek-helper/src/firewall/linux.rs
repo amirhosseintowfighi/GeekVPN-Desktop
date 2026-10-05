@@ -58,6 +58,9 @@ fn nft(script: &str) -> Result<(), String> {
 
 impl Firewall {
     pub fn engage(&mut self, ks: &KillSwitch, _tun: Option<&str>, _engine: &Path) -> Result<(), String> {
+        self.engage_with_apps(ks, _tun, _engine, &[])
+    }
+    pub fn engage_with_apps(&mut self, ks: &KillSwitch, _tun: Option<&str>, _engine: &Path, _extra: &[String]) -> Result<(), String> {
         nft(&ruleset(ks))
     }
 

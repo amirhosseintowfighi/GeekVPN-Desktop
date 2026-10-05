@@ -181,7 +181,12 @@ impl Firewall {
         self.engine.map(|(h, _)| h as HANDLE)
     }
 
+    #[allow(dead_code)]
     pub fn engage(&mut self, ks: &KillSwitch, tun: Option<&str>, engine: &Path) -> Result<(), String> {
+        self.engage_with_apps(ks, tun, engine, &[])
+    }
+
+    pub fn engage_with_apps(&mut self, ks: &KillSwitch, tun: Option<&str>, engine: &Path, extra_apps: &[String]) -> Result<(), String> {
         let dynamic = !ks.strict;
         if self.engine.is_some_and(|(_, d)| d != dynamic) {
             self.release()?;
@@ -195,12 +200,25 @@ impl Firewall {
         let mut app: *mut FWP_BYTE_BLOB = null_mut();
         // SAFETY: `path` is NUL-terminated; `app` is freed below.
         check("FwpmGetAppIdFromFileName0", unsafe { FwpmGetAppIdFromFileName0(path.as_ptr(), &mut app) })?;
+        // Extra apps (geekcore) that also need to bypass the kill switch on Windows:
+        // hev's traffic goes via geekcore's SOCKS, so geekcore's own outbound must not be blocked.
+        let mut extra_blobs: Vec<(*mut FWP_BYTE_BLOB, Vec<u16>)> = Vec::new();
+        for p in extra_apps {
+            let w = wide(p);
+            let mut blob: *mut FWP_BYTE_BLOB = null_mut();
+            if unsafe { FwpmGetAppIdFromFileName0(w.as_ptr(), &mut blob) } == 0 {
+                extra_blobs.push((blob, w));
+            }
+        }
 
         let mut rules: Vec<Rule> = Vec::new();
         for v6 in [false, true] {
             rules.push(Rule { permit: false, v6, conds: vec![] });
             rules.push(Rule { permit: true, v6, conds: vec![Cond::Loopback] });
             rules.push(Rule { permit: true, v6, conds: vec![Cond::App(app)] });
+            for (blob, _) in &extra_blobs {
+                rules.push(Rule { permit: true, v6, conds: vec![Cond::App(*blob)] });
+            }
             if let Some(luid) = tun.and_then(tun_luid) {
                 rules.push(Rule { permit: true, v6, conds: vec![Cond::Interface(luid)] });
             }
@@ -240,6 +258,9 @@ impl Firewall {
         })();
         // SAFETY: `app` came from FwpmGetAppIdFromFileName0.
         unsafe { FwpmFreeMemory0(&mut app as *mut _ as *mut *mut core::ffi::c_void) };
+        for (mut blob, _) in extra_blobs {
+            unsafe { FwpmFreeMemory0(&mut blob as *mut _ as *mut *mut core::ffi::c_void) };
+        }
         result
     }
 

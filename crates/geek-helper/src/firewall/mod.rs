@@ -45,12 +45,18 @@ impl Firewall {
     /// moment between the old rules and the new ones with nothing in place.
     /// `tun` is the device once it exists (macOS and Windows need its name
     /// to let its packets through; before that, nothing but the rest).
+    /// `extra_apps` are other executables that must bypass the kill switch
+    /// (Windows: geekcore paths so the tunnel's own transport goes direct).
     pub fn engage(&mut self, ks: &KillSwitch, tun: Option<&str>, engine: &Path) -> Result<(), String> {
+        self.engage_with_apps(ks, tun, engine, &[])
+    }
+
+    pub fn engage_with_apps(&mut self, ks: &KillSwitch, tun: Option<&str>, engine: &Path, extra_apps: &[String]) -> Result<(), String> {
         #[cfg(any(target_os = "linux", target_os = "macos", windows))]
-        return self.inner.engage(ks, tun, engine);
+        return self.inner.engage_with_apps(ks, tun, engine, extra_apps);
         #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
         {
-            let _ = (ks, tun, engine);
+            let _ = (ks, tun, engine, extra_apps);
             Err("no kill switch on this system".into())
         }
     }

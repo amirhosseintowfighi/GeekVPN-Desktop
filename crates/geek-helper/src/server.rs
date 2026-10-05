@@ -61,12 +61,15 @@ impl Shared {
             Request::Status => json!(Status { tun: self.tun.as_ref().map(|(_, r)| r.info.clone()), kill_switch: self.kill_switch }),
             Request::TunStart { spec, kill_switch } => {
                 let engine_bin = paths::engine_binary();
+                let extra_apps: Vec<String> = spec.core_paths.clone();
                 // Firewall first: from here on nothing leaks, including while
                 // the old tunnel goes down and the new one comes up.
                 match kill_switch {
                     Some(ks) => {
                         let known = (!cfg!(target_os = "macos")).then_some(TUN_NAME);
-                        self.firewall.engage(&ks, known, &engine_bin).map_err(|e| HelperError::new(ErrorCode::Firewall, e))?;
+                        self.firewall
+                            .engage_with_apps(&ks, known, &engine_bin, &extra_apps)
+                            .map_err(|e| HelperError::new(ErrorCode::Firewall, e))?;
                         self.kill_switch = Some(ks);
                     }
                     None if self.kill_switch.is_some() => self.release_kill_switch()?,
@@ -80,7 +83,7 @@ impl Shared {
                     // Now that the device exists, let its packets through
                     // where the rules name it (macOS's utunN, Windows' LUID).
                     self.firewall
-                        .engage(&ks, Some(&running.info.interface), &engine_bin)
+                        .engage_with_apps(&ks, Some(&running.info.interface), &engine_bin, &extra_apps)
                         .map_err(|e| HelperError::new(ErrorCode::Firewall, e))?;
                 }
                 let info = running.info.clone();

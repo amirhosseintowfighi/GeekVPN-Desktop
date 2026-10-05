@@ -59,6 +59,9 @@ fn pfctl(args: &[&str], stdin: Option<&str>) -> Result<String, String> {
 
 impl Firewall {
     pub fn engage(&mut self, ks: &KillSwitch, tun: Option<&str>, _engine: &Path) -> Result<(), String> {
+        self.engage_with_apps(ks, tun, _engine, &[])
+    }
+    pub fn engage_with_apps(&mut self, ks: &KillSwitch, tun: Option<&str>, _engine: &Path, _extra: &[String]) -> Result<(), String> {
         pfctl(&["-a", ANCHOR, "-f", "-"], Some(&ruleset(ks, tun)))?;
         if self.token.is_none() {
             let out = pfctl(&["-E"], None)?;
