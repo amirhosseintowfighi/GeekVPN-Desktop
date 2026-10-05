@@ -103,8 +103,13 @@ jobs:
         shell: bash
         run: scripts/build-geekcore.sh ${{ matrix.triple }}
       - name: Build sing-box
+        if: matrix.name != 'windows'
         shell: bash
         run: scripts/build-singbox.sh ${{ matrix.triple }}
+      - name: Fetch hev-socks5-tunnel + wintun + msys
+        if: matrix.name == 'windows'
+        shell: bash
+        run: scripts/fetch-hev.sh ${{ matrix.triple }}
       - name: Build geekvpn-helper
         shell: bash
         run: scripts/build-helper.sh ${{ matrix.triple }}

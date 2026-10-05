@@ -87,7 +87,7 @@ jobs:
         if: matrix.name != 'windows'
         shell: bash
         run: scripts/build-singbox.sh ${{ matrix.triple }}
-      - name: Fetch hev-socks5-tunnel + wintun
+      - name: Fetch hev-socks5-tunnel + wintun + msys
         if: matrix.name == 'windows'
         shell: bash
         run: scripts/fetch-hev.sh ${{ matrix.triple }}
@@ -116,8 +116,10 @@ jobs:
             stub "$BIN/$name.exe"
           done
           stub "$BIN/wintun.dll"
+          stub "$BIN/msys-2.0.dll"
           for triple in x86_64-pc-windows-msvc x86_64-pc-windows-gnu x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin universal-apple-darwin; do
             stub "$BIN/wintun-$triple.dll"
+            stub "$BIN/msys-2.0-$triple.dll"
           done
           ls -lh "$BIN" || true
       - run: pnpm install --frozen-lockfile

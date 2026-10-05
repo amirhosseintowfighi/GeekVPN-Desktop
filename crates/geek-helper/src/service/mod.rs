@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use crate::paths::{self, ENGINE_FILE, HELPER_FILE, HEV_FILE, WINTUN_FILE};
+use crate::paths::{self, ENGINE_FILE, HELPER_FILE, HEV_FILE, MSYS_FILE, WINTUN_FILE};
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -76,7 +76,7 @@ fn copy_binaries() -> Result<(), String> {
         return Ok(());
     }
     std::fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
-    let tun_files: &[&str] = if cfg!(windows) { &[HEV_FILE, WINTUN_FILE] } else { &[ENGINE_FILE] };
+    let tun_files: &[&str] = if cfg!(windows) { &[HEV_FILE, WINTUN_FILE, MSYS_FILE] } else { &[ENGINE_FILE] };
     for name in std::iter::once(HELPER_FILE).chain(tun_files.iter().copied()) {
         let src = from.join(name);
         if !src.exists() {

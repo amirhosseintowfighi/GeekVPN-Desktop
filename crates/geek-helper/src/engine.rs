@@ -283,10 +283,14 @@ mod win {
         if !bin.exists() {
             return Err(HelperError::new(ErrorCode::NoEngine, format!("{} is missing", bin.display())));
         }
-        // wintun.dll must sit next to the hev exe (or helper exe) for the loader.
+        // wintun.dll + msys-2.0.dll must sit next to the hev exe (or helper exe) for the loader.
         let wintun = paths::wintun_dll();
         if !wintun.exists() {
             eprintln!("geekvpn-helper: wintun.dll missing at {}, will rely on system search", wintun.display());
+        }
+        let msys = paths::msys_dll();
+        if !msys.exists() {
+            eprintln!("geekvpn-helper: msys-2.0.dll missing at {}, hev will fail to start", msys.display());
         }
         std::fs::create_dir_all(state_dir).map_err(|e| HelperError::new(ErrorCode::Internal, format!("{}: {e}", state_dir.display())))?;
 

@@ -16,9 +16,10 @@ HEV_VERSION="2.18.0"
 HEV_URL="https://github.com/heiher/hev-socks5-tunnel/releases/download/${HEV_VERSION}/hev-socks5-tunnel-win64.zip"
 # sha256 of the zip above (verified 2026-10-05)
 HEV_ZIP_SHA256="2b8cdcfdfafca4bd3732c759749547e0672217c568a0240e2570f28ca8f58bd6"
-# sha256 of wintun.dll inside that zip (for extra check)
+# sha256 of wintun.dll / hev exe / msys dll inside that zip (for extra check)
 WINTUN_SHA256="e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce"
 HEV_EXE_SHA256="bd78baca0619a7a7dafd15aae0443b78be8a8152e7aa35752914b5b181e4ee9e"
+MSYS_SHA256="1410599ee2efcede0869abec8910398d688755952e59cf7983b15cac6de78201"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TRIPLE="${1:-$(rustc -vV | sed -n 's/^host: //p')}"
@@ -74,21 +75,22 @@ else
   echo "fetch-hev: need unzip or powershell or 7z to extract zip" >&2; exit 1
 fi
 
-# zip contains hev-socks5-tunnel/hev-socks5-tunnel.exe + wintun.dll
+# zip contains hev-socks5-tunnel/hev-socks5-tunnel.exe + wintun.dll + msys-2.0.dll
 HEV_SRC="$(find "$WORK/unzipped" -name 'hev-socks5-tunnel.exe' -print -quit)"
 WINTUN_SRC="$(find "$WORK/unzipped" -name 'wintun.dll' -print -quit)"
-if [[ -z "$HEV_SRC" || -z "$WINTUN_SRC" ]]; then
-  echo "fetch-hev: could not find hev-socks5-tunnel.exe or wintun.dll in zip" >&2
+MSYS_SRC="$(find "$WORK/unzipped" -name 'msys-2.0.dll' -print -quit)"
+if [[ -z "$HEV_SRC" || -z "$WINTUN_SRC" || -z "$MSYS_SRC" ]]; then
+  echo "fetch-hev: could not find hev-socks5-tunnel.exe, wintun.dll or msys-2.0.dll in zip" >&2
   ls -R "$WORK/unzipped" >&2 || true
   exit 1
 fi
 
-for file in "$HEV_SRC" "$WINTUN_SRC"; do
+for file in "$HEV_SRC" "$WINTUN_SRC" "$MSYS_SRC"; do
   # verify inner hashes
   :
 done
 # optional extra verify (warn only if mismatch, zip check already guarantees)
-for pair in "$HEV_SRC:$HEV_EXE_SHA256" "$WINTUN_SRC:$WINTUN_SHA256"; do
+for pair in "$HEV_SRC:$HEV_EXE_SHA256" "$WINTUN_SRC:$WINTUN_SHA256" "$MSYS_SRC:$MSYS_SHA256"; do
   src="${pair%%:*}"; want="${pair##*:}"
   got2="$(sha256_of "$src")"
   if [[ "${got2,,}" != "${want,,}" ]]; then
@@ -98,15 +100,19 @@ done
 
 OUT_HEV="$BIN/hev-socks5-tunnel-$TRIPLE$EXT"
 OUT_WINTUN="$BIN/wintun-$TRIPLE.dll"
+OUT_MSYS="$BIN/msys-2.0-$TRIPLE.dll"
 cp -f "$HEV_SRC" "$OUT_HEV"
 cp -f "$WINTUN_SRC" "$OUT_WINTUN"
+cp -f "$MSYS_SRC" "$OUT_MSYS"
 
 # For native Windows dev (triple matches host), also place without suffix so tauri dev / sidecar lookup works
 HOST_TRIPLE="$(rustc -vV 2>/dev/null | sed -n 's/^host: //p' || echo x86_64-pc-windows-msvc)"
 if [[ "$TRIPLE" == "$HOST_TRIPLE" ]]; then
   cp -f "$HEV_SRC" "$BIN/hev-socks5-tunnel$EXT"
   cp -f "$WINTUN_SRC" "$BIN/wintun.dll"
+  cp -f "$MSYS_SRC" "$BIN/msys-2.0.dll"
 fi
 
 echo "built $OUT_HEV"
 echo "built $OUT_WINTUN"
+echo "built $OUT_MSYS"
