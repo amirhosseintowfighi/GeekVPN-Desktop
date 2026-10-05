@@ -247,7 +247,7 @@ impl Tunnel {
                 Ok(delay) => {
                     let brought_up = match &helper {
                         None => self.point_system_proxy(&config).await.map(|note| (note, false)),
-                        Some(h) => self.tun_up(h, &upstream, &opts).await.map(|()| (None, opts.kill_switch.is_some())),
+                        Some(h) => self.tun_up(h, &upstream, &opts, server, over.as_deref()).await.map(|()| (None, opts.kill_switch.is_some())),
                     };
                     let (note, kill_switch) = match brought_up {
                         Ok(x) => x,
@@ -320,10 +320,22 @@ impl Tunnel {
         }
     }
 
-    /// Hands sing-box (via the helper) the TUN spec for this connection.
-    async fn tun_up(&self, helper: &HelperClient, upstream: &Upstream, opts: &ConnectOptions) -> Result<(), String> {
+    /// Hands the helper the TUN spec for this connection.
+    /// `server` + `over` give the actual IP the engine will dial, so the
+    /// helper can add a bypass route for it (Windows hev has no per-process
+    /// routing: without this its own TCP loops through the TUN and the link
+    /// goes dead — the "internet cuts on TUN" bug).
+    async fn tun_up(
+        &self,
+        helper: &HelperClient,
+        upstream: &Upstream,
+        opts: &ConnectOptions,
+        server: &Server,
+        over: Option<&str>,
+    ) -> Result<(), String> {
         let direct = if opts.route == Route::Smart { self.iran().await? } else { RuleLists::default() };
         let core_path = self.binary.canonicalize().unwrap_or_else(|_| self.binary.clone());
+        let bypass = Self::tun_bypass(server, over).await;
         let spec = TunSpec {
             upstream: upstream.clone(),
             route: opts.route,
@@ -331,6 +343,7 @@ impl Tunnel {
             apps: opts.apps.clone(),
             core_paths: vec![core_path.to_string_lossy().into_owned()],
             rules: opts.rules.clone(),
+            bypass,
         };
         let info: TunInfo = helper
             .call(Request::TunStart { spec: Box::new(spec), kill_switch: opts.kill_switch }, Duration::from_secs(30))
@@ -338,6 +351,27 @@ impl Tunnel {
             .map_err(|e| helper_message(&e))?;
         *self.tun.lock().await = Some((info, opts.kill_switch.is_some_and(|k| k.strict)));
         Ok(())
+    }
+
+    async fn tun_bypass(server: &Server, over: Option<&str>) -> Vec<String> {
+        // `over` is the clean-IP chosen by the scanner (numeric). Prefer it.
+        if let Some(ip) = over {
+            let s = ip.trim();
+            if s.parse::<std::net::IpAddr>().is_ok() {
+                return vec![s.to_string()];
+            }
+        }
+        let addr = server.address.trim();
+        if addr.is_empty() { return vec![]; }
+        if addr.parse::<std::net::IpAddr>().is_ok() {
+            return vec![addr.to_string()];
+        }
+        // Domain (rare for panel servers, common for CDN-fronted ones): this
+        // TUN mode bypass relies on a numeric gateway route, so a raw domain
+        // cannot be used here — the WFP App bypass for geekcore then carries
+        // the connection. Returning [] is intentional (not 0.0.0.0); adding a
+        // /32 for a resolved CDN IP would pin only one edge.
+        vec![]
     }
 
     /// Iran's lists from the shipped geo files, read once.

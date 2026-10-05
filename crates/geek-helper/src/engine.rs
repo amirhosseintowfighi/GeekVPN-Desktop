@@ -314,8 +314,16 @@ mod win {
 
         // Wait for Wintun adapter "GeekVPN" to appear (hev creates it).
         wait_for_adapter(&mut child, &tail).await?;
-        // Publish routes that send every packet through GeekVPN.
-        // The SOCKS transport itself is exempted by WFP (App filter for geekcore), so no bypass route is needed.
+        // Bypass for the server IP before the default routes: otherwise
+        // hev's own TCP to the server loops back through the TUN. WFP's App
+        // filter for geekcore covers most cases, but a concrete /32 route via
+        // the real gateway is robust across firewalls/AV interop.
+        for ip in &spec.bypass {
+            if let Err(e) = add_bypass(ip) {
+                eprintln!("geekvpn-helper: add_bypass {ip} warning: {e}");
+            }
+        }
+        // Publish routes that send every other packet through GeekVPN.
         if let Err(e) = add_routes() {
             eprintln!("geekvpn-helper: add_routes warning: {e}");
             // Not fatal: the TUN still carries packets if WFP is correct, but log it.
@@ -323,10 +331,13 @@ mod win {
 
         let pid = child.id();
         let yml_path2 = yml_path.clone();
+        let bypass_for_stop = spec.bypass.clone();
+        let bypass_for_exit = spec.bypass.clone();
         let (stop_tx, stop_rx) = oneshot::channel::<oneshot::Sender<()>>();
         tokio::spawn(async move {
             tokio::select! {
                 done = stop_rx => {
+                    for ip in &bypass_for_stop { remove_bypass(ip); }
                     let _ = remove_routes();
                     let _ = child.kill().await;
                     // Give hev a moment to close the adapter handle.
@@ -337,6 +348,7 @@ mod win {
                     }
                 }
                 status = child.wait() => {
+                    for ip in &bypass_for_exit { remove_bypass(ip); }
                     let _ = remove_routes();
                     let why = format!("hev-socks5-tunnel exited ({}): {}", status.map(|s| s.to_string()).unwrap_or_default(), last_lines(&tail));
                     let _ = exited.send((generation, why));
@@ -397,6 +409,88 @@ mod win {
         let mut luid: NET_LUID_LH = unsafe { std::mem::zeroed() };
         let rc = unsafe { ConvertInterfaceAliasToLuid(name.as_ptr(), &mut luid) };
         rc == 0
+    }
+
+    fn default_v4_route() -> Option<(String, String)> {
+        use std::os::windows::process::CommandExt;
+        let script = "$r=Get-NetRoute -DestinationPrefix 0.0.0.0/0 -ErrorAction SilentlyContinue | Select-Object -First 1; if($r){\"{0}|{1}\" -f $r.InterfaceAlias, $r.NextHop}";
+        let out = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .creation_flags(0x0800_0000)
+            .output().ok()?;
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let (iface, gw) = s.split_once('|')?;
+        let iface = iface.trim();
+        let gw = gw.trim();
+        if iface.is_empty() { None } else { Some((iface.to_string(), gw.to_string())) }
+    }
+
+    fn default_v6_route() -> Option<(String, String)> {
+        use std::os::windows::process::CommandExt;
+        let script = "$r=Get-NetRoute -DestinationPrefix ::/0 -ErrorAction SilentlyContinue | Select-Object -First 1; if($r){\"{0}|{1}\" -f $r.InterfaceAlias, $r.NextHop}";
+        let out = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .creation_flags(0x0800_0000)
+            .output().ok()?;
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let (iface, gw) = s.split_once('|')?;
+        let iface = iface.trim();
+        let gw = gw.trim();
+        if iface.is_empty() { None } else { Some((iface.to_string(), gw.to_string())) }
+    }
+
+    fn add_bypass(ip: &str) -> Result<(), String> {
+        let ip = ip.trim();
+        if ip.is_empty() { return Ok(()); }
+        let addr: std::net::IpAddr = ip.parse().map_err(|_| format!("bad ip {ip}"))?;
+        if addr.to_string() == "198.18.0.1" || addr.to_string() == "198.18.0.2" { return Ok(()); }
+        match addr {
+            std::net::IpAddr::V4(v4) => {
+                let prefix = format!("{v4}/32");
+                if let Some((iface, gw)) = default_v4_route() {
+                    // netsh needs interface quoted if it contains spaces (e.g. "Wi-Fi 2").
+                    let iface_arg = format!("interface=\"{iface}\"");
+                    // 0.0.0.0 means on-link; use discovered gateway, fallback to 0.0.0.0 if empty.
+                    let gw = if gw.is_empty() || gw == "0.0.0.0" { "0.0.0.0".to_string() } else { gw };
+                    run_hidden("netsh", &["interface", "ipv4", "add", "route", &format!("prefix={prefix}"), &iface_arg, &format!("nexthop={gw}"), "metric=0", "store=active"])?;
+                }
+                Ok(())
+            }
+            std::net::IpAddr::V6(v6) => {
+                let prefix = format!("{v6}/128");
+                if let Some((iface, gw)) = default_v6_route() {
+                    let iface_arg = format!("interface=\"{iface}\"");
+                    let gw = if gw.is_empty() { "::".to_string() } else { gw };
+                    run_hidden("netsh", &["interface", "ipv6", "add", "route", &format!("prefix={prefix}"), &iface_arg, &format!("nexthop={gw}"), "metric=0", "store=active"])?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn remove_bypass(ip: &str) {
+        let ip = ip.trim();
+        if ip.is_empty() { return; }
+        let Ok(addr): Result<std::net::IpAddr, _> = ip.parse() else { return };
+        match addr {
+            std::net::IpAddr::V4(v4) => {
+                let prefix = format!("{v4}/32");
+                if let Some((iface, _)) = default_v4_route() {
+                    let iface_arg = format!("interface=\"{iface}\"");
+                    let _ = run_hidden("netsh", &["interface", "ipv4", "delete", "route", &format!("prefix={prefix}"), &iface_arg]);
+                }
+                // Also try without iface (best effort).
+                let _ = run_hidden("netsh", &["interface", "ipv4", "delete", "route", &format!("prefix={prefix}"), "interface=GeekVPN"]);
+            }
+            std::net::IpAddr::V6(v6) => {
+                let prefix = format!("{v6}/128");
+                if let Some((iface, _)) = default_v6_route() {
+                    let iface_arg = format!("interface=\"{iface}\"");
+                    let _ = run_hidden("netsh", &["interface", "ipv6", "delete", "route", &format!("prefix={prefix}"), &iface_arg]);
+                }
+                let _ = run_hidden("netsh", &["interface", "ipv6", "delete", "route", &format!("prefix={prefix}"), "interface=GeekVPN"]);
+            }
+        }
     }
 
     fn add_routes() -> Result<(), String> {

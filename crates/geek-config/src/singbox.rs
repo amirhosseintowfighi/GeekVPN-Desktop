@@ -67,6 +67,10 @@ pub struct TunSpec {
     /// The customer's own domain and address rules, after the apps'.
     #[serde(default)]
     pub rules: Vec<CustomRule>,
+    /// Server IPs that must bypass the TUN (Windows: route via gateway,
+    /// otherwise Xray's own connection loops through hev).
+    #[serde(default)]
+    pub bypass: Vec<String>,
 }
 
 /// What the helper decides on its own about the machine.
@@ -80,6 +84,26 @@ pub struct TunHost {
     pub clash_port: u16,
     pub clash_secret: String,
     pub mark: Option<u32>,
+}
+
+#[cfg(test)]
+mod _tun_spec_bypass {
+    use super::*;
+    #[test]
+    fn bypass_defaults_empty() {
+        let s = TunSpec {
+            upstream: Upstream { port: 10808, username: "u".into(), password: "p".into() },
+            route: crate::xray::Route::Global,
+            direct: Default::default(),
+            apps: Default::default(),
+            core_paths: vec![],
+            rules: vec![],
+            bypass: vec![],
+        };
+        assert!(s.bypass.is_empty());
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["bypass"], serde_json::json!([]));
+    }
 }
 
 pub fn tun_config(spec: &TunSpec, host: &TunHost) -> Value {

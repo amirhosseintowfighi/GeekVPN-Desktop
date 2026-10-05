@@ -69,7 +69,11 @@ function HelperCard() {
             {status === null
               ? "در حال بررسی…"
               : status.state === "ready"
-                ? `نصب و روشن · نسخه‌ی ${faDigits(status.version)} · sing-box ${faDigits(status.singBox)}`
+                ? (() => {
+                    const eng = status.singBox.trim();
+                    const engLabel = eng.toLowerCase().includes("hev") || eng.toLowerCase().includes("wintun") ? eng : `sing-box ${eng}`;
+                    return `نصب و روشن · نسخه‌ی ${faDigits(status.version)} · ${faDigits(engLabel)}`;
+                  })()
                 : status.state === "outdated"
                   ? "نسخه‌ی نصب‌شده با برنامه جور نیست؛ دوباره نصبش کن."
                   : "حالت TUN و Kill Switch به این سرویس نیاز دارند. یک بار با اجازه‌ی مدیر نصب می‌شود."}

@@ -140,6 +140,7 @@ fn tun_spec(route: Route, apps: AppRouting) -> TunSpec {
         apps,
         core_paths: vec!["/opt/GeekVPN/geekcore".into()],
         rules: vec![],
+        bypass: vec![],
     }
 }
 

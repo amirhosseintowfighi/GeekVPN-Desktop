@@ -11,6 +11,7 @@ fn spec() -> TunSpec {
         apps: AppRouting::default(),
         core_paths: vec!["/x/geekcore".into()],
         rules: vec![],
+        bypass: vec![],
     }
 }
 
