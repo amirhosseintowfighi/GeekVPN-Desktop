@@ -45,6 +45,14 @@ jobs:
             triple: universal-apple-darwin
             args: "--target universal-apple-darwin --bundles dmg"
     runs-on: ${{ matrix.os }}
+    env:
+      GEEK_ENV: prod
+      GEEK_API_BASE_PROD: ${{ secrets.GEEK_API_BASE_PROD }}
+      GEEK_API_BASE_STAGING: ${{ secrets.GEEK_API_BASE_STAGING }}
+      GEEK_BOT_USERNAME: ${{ vars.GEEK_BOT_USERNAME }}
+      GEEK_UPDATER_PUBKEY: ${{ vars.GEEK_UPDATER_PUBKEY }}
+      GEEK_RELEASE_REPO: ${{ github.repository }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v7
       - name: Linux build dependencies
