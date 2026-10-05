@@ -102,22 +102,23 @@ jobs:
         run: |
           BIN="apps/desktop/src-tauri/binaries"
           mkdir -p "$BIN"
-          # tauri.conf lists both TUN engines and wintun.dll; each OS only builds one.
-          # Stub the missing ones so cargo clippy / tauri_build pass on all runners.
+          # tauri.conf lists both TUN engines and wintun.dll. Each OS only builds
+          # one engine, but `tauri_build` (run by `cargo clippy`) checks for the
+          # host triple's binaries, not the matrix triple. Create empty stubs for
+          # every combination so clippy passes on every runner.
           stub() { [ -f "$1" ] || { echo "stub $1"; : > "$1"; }; }
-          stub "$BIN/hev-socks5-tunnel-x86_64-pc-windows-msvc.exe"
-          stub "$BIN/hev-socks5-tunnel-x86_64-unknown-linux-gnu"
-          stub "$BIN/hev-socks5-tunnel-universal-apple-darwin"
-          stub "$BIN/hev-socks5-tunnel.exe"
-          stub "$BIN/hev-socks5-tunnel"
-          stub "$BIN/geekvpn-sing-box-x86_64-pc-windows-msvc.exe"
-          stub "$BIN/geekvpn-sing-box-x86_64-unknown-linux-gnu"
-          stub "$BIN/geekvpn-sing-box-universal-apple-darwin"
-          stub "$BIN/geekvpn-sing-box.exe"
-          stub "$BIN/geekvpn-sing-box"
+          for name in hev-socks5-tunnel geekvpn-sing-box geekcore geekvpn-helper; do
+            for triple in x86_64-unknown-linux-gnu x86_64-pc-windows-msvc x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-apple-darwin universal-apple-darwin; do
+              ext=""; case "$triple" in *windows*) ext=".exe" ;; esac
+              stub "$BIN/$name-$triple$ext"
+            done
+            stub "$BIN/$name"
+            stub "$BIN/$name.exe"
+          done
           stub "$BIN/wintun.dll"
-          stub "$BIN/wintun-x86_64-pc-windows-msvc.dll"
-          stub "$BIN/wintun-x86_64-unknown-linux-gnu.dll"
+          for triple in x86_64-pc-windows-msvc x86_64-pc-windows-gnu x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin universal-apple-darwin; do
+            stub "$BIN/wintun-$triple.dll"
+          done
           ls -lh "$BIN" || true
       - run: pnpm install --frozen-lockfile
       - run: cargo clippy --workspace --all-targets -- -D warnings
