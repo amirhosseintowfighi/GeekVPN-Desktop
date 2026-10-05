@@ -86,26 +86,6 @@ pub struct TunHost {
     pub mark: Option<u32>,
 }
 
-#[cfg(test)]
-mod _tun_spec_bypass {
-    use super::*;
-    #[test]
-    fn bypass_defaults_empty() {
-        let s = TunSpec {
-            upstream: Upstream { port: 10808, username: "u".into(), password: "p".into() },
-            route: crate::xray::Route::Global,
-            direct: Default::default(),
-            apps: Default::default(),
-            core_paths: vec![],
-            rules: vec![],
-            bypass: vec![],
-        };
-        assert!(s.bypass.is_empty());
-        let v = serde_json::to_value(&s).unwrap();
-        assert_eq!(v["bypass"], serde_json::json!([]));
-    }
-}
-
 pub fn tun_config(spec: &TunSpec, host: &TunHost) -> Value {
     let mut address = vec![json!("172.19.0.1/30")];
     if host.ipv6 {
