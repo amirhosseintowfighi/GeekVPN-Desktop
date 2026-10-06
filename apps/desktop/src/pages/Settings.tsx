@@ -103,8 +103,14 @@ function HelperCard() {
         )}
       </div>
       {error && (
-        <span role="alert" className="text-xs leading-[1.8] text-bad">
+        <span role="alert" className="whitespace-pre-line text-xs leading-[1.8] text-bad">
           {error}
+        </span>
+      )}
+      {ready && (
+        <span className="rounded-xl bg-white/10 px-3 py-2 text-[11px] leading-[1.8] text-ink-2">
+          نکته: در حالت TUN دستور <span dir="ltr" className="font-num">ping</span> (ICMP) از تونل رد نمی‌شود — طبیعی است و نشانه‌ی قطع بودن نیست.
+          برای تستِ اتصال از <span dir="ltr" className="font-num">curl https://ifconfig.me</span> یا سایت‌های «آی‌پی من چیست» استفاده کن.
         </span>
       )}
     </div>
