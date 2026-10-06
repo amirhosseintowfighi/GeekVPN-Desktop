@@ -110,17 +110,17 @@ fn find_source(from: &Path, name: &str) -> Option<std::path::PathBuf> {
     // Per-user NSIS installs put the exe at `.../AppData/Local/GeekVPN/`.
     // Try every layout that has been observed, plus parent-dir fallbacks for
     // the case where `from` is deep (e.g. `.../resources` itself).
-    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-    // Beside the exe (externalBin) and the two resource layouts.
-    candidates.push(from.join(name));
-    candidates.push(from.join("binaries").join(name));
-    candidates.push(from.join("resources").join("binaries").join(name));
-    candidates.push(from.join("resources").join(name));
-    // One level up (resource_dir vs exe_dir difference, and `..` without canonicalize).
-    candidates.push(from.join("..").join(name));
-    candidates.push(from.join("..").join("binaries").join(name));
-    candidates.push(from.join("..").join("resources").join("binaries").join(name));
-    candidates.push(from.join("..").join("resources").join(name));
+    let mut candidates = vec![
+        from.join(name),
+        from.join("binaries").join(name),
+        from.join("resources").join("binaries").join(name),
+        from.join("resources").join(name),
+        // One level up (resource_dir vs exe_dir difference, and `..` without canonicalize).
+        from.join("..").join(name),
+        from.join("..").join("binaries").join(name),
+        from.join("..").join("resources").join("binaries").join(name),
+        from.join("..").join("resources").join(name),
+    ];
     if let Some(parent) = from.parent() {
         candidates.push(parent.join(name));
         candidates.push(parent.join("binaries").join(name));
