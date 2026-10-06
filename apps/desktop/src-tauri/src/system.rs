@@ -90,7 +90,6 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     // اگر ادمین نیستیم، اصلا تلاشِ مستقیم نکن — مستقیم برو سراغ UAC تا پیامِ
     // winapiِ خام به کاربر نرسد.
     let already_admin = {
-        #[allow(unused_imports)]
         use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
         ServiceManager::local_computer(
             None::<&str>,
