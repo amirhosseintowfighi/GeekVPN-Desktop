@@ -366,11 +366,31 @@ impl Tunnel {
         if addr.parse::<std::net::IpAddr>().is_ok() {
             return vec![addr.to_string()];
         }
-        // Domain (rare for panel servers, common for CDN-fronted ones): this
-        // TUN mode bypass relies on a numeric gateway route, so a raw domain
-        // cannot be used here — the WFP App bypass for geekcore then carries
-        // the connection. Returning [] is intentional (not 0.0.0.0); adding a
-        // /32 for a resolved CDN IP would pin only one edge.
+        // Domain (CDN-fronted WS/XHTTP etc.): hev's default routes (0.0.0.0/1)
+        // would otherwise send geekcore's own TCP to this domain back through
+        // the TUN, looping forever and cutting the internet. WFP App bypass
+        // does NOT change routing, so we must add a concrete /32 via the real
+        // gateway. Resolve the domain now (before TUN is up) and return those IPs.
+        let host = addr.trim_matches(|c| c == '[' || c == ']');
+        let port = server.port;
+        // tokio DNS; 3s cap so a bad DNS doesn't stall connect.
+        let addrs = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            tokio::net::lookup_host((host, port)),
+        )
+        .await;
+        if let Ok(Ok(iter)) = addrs {
+            let mut out: Vec<String> = iter.map(|sa| sa.ip().to_string()).collect();
+            out.sort_unstable();
+            out.dedup();
+            if !out.is_empty() {
+                // Prefer IPv4 first (most servers are v4); keep both.
+                return out;
+            }
+        }
+        // Fallback: could not resolve — let WFP App filter carry it, but log
+        // so the helper's `add_bypass` warning is visible.
+        eprintln!("geekvpn: tun_bypass could not resolve {host}, no bypass route");
         vec![]
     }
 

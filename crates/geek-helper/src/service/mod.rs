@@ -65,8 +65,9 @@ pub fn uninstall() -> Result<(), String> {
     Err("no service support on this system".into())
 }
 
-/// Copies the helper and sing-box from beside the running executable into
-/// the install directory, unless we already run from there.
+/// Copies the helper and its TUN engine from beside the running executable
+/// (or from the app's resources directory on Windows) into the install
+/// directory, unless we already run from there.
 #[allow(dead_code)]
 fn copy_binaries() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -78,10 +79,8 @@ fn copy_binaries() -> Result<(), String> {
     std::fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
     let tun_files: &[&str] = if cfg!(windows) { &[HEV_FILE, WINTUN_FILE, MSYS_FILE] } else { &[ENGINE_FILE] };
     for name in std::iter::once(HELPER_FILE).chain(tun_files.iter().copied()) {
-        let src = from.join(name);
-        if !src.exists() {
-            return Err(format!("{} is missing", src.display()));
-        }
+        let src = find_source(from, name)
+            .ok_or_else(|| format!("{} is missing (looked next to {} and in resources/binaries)", name, from.display()))?;
         // Copy beside, then rename: the old binary may still be mapped by a
         // process that is shutting down.
         let tmp = to.join(format!("{name}.new"));
@@ -94,6 +93,38 @@ fn copy_binaries() -> Result<(), String> {
         std::fs::rename(&tmp, to.join(name)).map_err(|e| format!("{}: {e}", to.join(name).display()))?;
     }
     Ok(())
+}
+
+fn find_source(from: &Path, name: &str) -> Option<std::path::PathBuf> {
+    // Tauri bundles `resources: ["binaries/wintun.dll", ...]` next to the exe
+    // (externalBin helpers sit beside the exe). On Windows wintun/msys are
+    // resources, not sidecars, so look in both places.
+    let direct = from.join(name);
+    if direct.exists() {
+        return Some(direct);
+    }
+    let candidates = [
+        from.join("resources").join("binaries").join(name),
+        from.join("..").join("resources").join("binaries").join(name),
+    ];
+    for c in candidates {
+        if c.exists() {
+            return Some(c);
+        }
+        // `..` segment is literal without canonicalize; try normalized form.
+        if let Ok(canonical) = c.canonicalize() {
+            if canonical.exists() {
+                return Some(canonical);
+            }
+        }
+    }
+    if let Some(parent) = from.parent() {
+        let r = parent.join("resources").join("binaries").join(name);
+        if r.exists() {
+            return Some(r);
+        }
+    }
+    None
 }
 
 fn same_dir(a: &Path, b: &Path) -> bool {
