@@ -115,13 +115,18 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
 
     let log = std::env::temp_dir().join("geekvpn-helper-install.log");
     let _ = std::fs::remove_file(&log);
+    // PowerShell 5.1: -Verb RunAs cannot be combined with -RedirectStandard*
+    // (→ "parameter set cannot be resolved…"). To avoid any quoting hell,
+    // write a tiny .cmd that does the redirection and elevate that instead.
+    let bat = std::env::temp_dir().join("geekvpn-helper-install.cmd");
+    let bat_content = format!("\"{}\" install > \"{}\" 2>&1\r\n", helper.display(), log.display());
+    let _ = std::fs::write(&bat, bat_content);
     let log_str = log.to_string_lossy().replace('\'', "''");
-    let helper_str = helper.to_string_lossy().replace('\'', "''");
-    // PowerShell 5.1: -Verb RunAs cannot use -RedirectStandard* (parameter
-    // set conflict → "parameter set cannot be resolved…"). Redirect inside
-    // the elevated cmd itself instead.
+    let bat_str = bat.to_string_lossy().replace('\'', "''");
+    // Only call Write-Host EXIT:$c when we actually have a process handle;
+    // PowerShell's catch path may not have $c.
     let command = format!(
-        "$log='{log_str}'; $helper='{helper_str}'; try {{ $p = Start-Process -FilePath cmd.exe -ArgumentList \"/c `\"$helper`\" install > `\"$log`\" 2>&1\" -Verb RunAs -Wait -PassThru -WindowStyle Hidden; $c=$p.ExitCode }} catch {{ $_.Exception.Message | Out-File -Append $log; $c=1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; exit $c"
+        "$log='{log_str}'; $bat='{bat_str}'; try {{ $p = Start-Process -FilePath 'cmd.exe' -ArgumentList \"/c `\"$bat`\"\" -Verb RunAs -Wait -PassThru -WindowStyle Hidden; if ($p) {{ $c=$p.ExitCode; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; Write-Host \"EXIT:$c\"; exit $c }} else {{ Write-Host \"NO_HANDLE\"; exit 1 }} }} catch {{ $m=$_.Exception.Message; $m | Out-File -Append $log; Write-Host $m; Write-Host \"CATCH\"; exit 1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}"
     );
     let out = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &command])
@@ -143,11 +148,32 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     if detail.is_empty() {
         detail = String::from_utf8_lossy(&out.stdout).trim().to_string();
     }
-    if detail.is_empty() {
-        return Err("نصب سرویس انجام نشد. UAC را تایید کردی؟ اگر آنتی‌ویروس داری، اجازه بده geekvpn-helper اجرا شود، بعد دوباره «نصب دوباره» را بزن.".into());
+    if detail.to_lowercase().contains("operation was canceled") || detail.contains("1223") || detail.to_lowercase().contains("canceled") {
+        return Err(
+            "نصب ادامه پیدا نکرد — به نظر پنجره‌ی تاییدِ ویندوز بسته یا رد شد.\n\
+             ویندوز هنگام «نصب دوباره» یک پنجره‌ی آبی/زرد می‌آورد با عنوان «آیا می‌خواهید به این برنامه اجازه دهید…» — \
+             باید Yes را بزنی. دوباره «نصب دوباره» را بزن و وقتی آن پنجره آمد Yes را بزن."
+                .into(),
+        );
     }
-    if detail.to_lowercase().contains("operation was canceled") || detail.contains("1223") {
-        return Err("نصب لغو شد — پنجره‌ی «آیا اجازه می‌دهید…» (UAC) تایید نشد. دوباره «نصب دوباره» را بزن و Yes را بزن.".into());
+    if detail.is_empty() || detail.starts_with("EXIT:") {
+        // ریشه‌ی باگِ بیلدِ قبلی: log خالی می‌ماند و فقط EXIT برمی‌گشت.
+        // علت واقعی معمولاً در bat/log است، نه در stderrِ powershell.
+        let bat_hint = if bat.exists() { format!(" (bat: {})", bat.display()) } else { "".to_string() };
+        return Err(format!(
+            "نصبِ سرویس بدونِ پیامِ خطایِ واضح تمام شد.\n\
+             برای اینکه دقیق بفهمم مشکل کجاست، لطفاً این‌ها را برایم بفرست:\n\
+             1) محتوای فایل: {}{bat_hint}\n\
+             2) همین متنِ خطا را کامل کپی کن (کد: {})\n\
+             3) نسخه‌ی برنامه (تنظیمات → درباره، یا نامِ فایلِ نصاب)\n\
+             \n\
+             توضیحِ UAC برای کاربرِ عادی: ویندوز برای نصبِ سرویس یک پنجره‌ی جداگانه می‌آورد \
+             («آیا اجازه می‌دهید این برنامه تغییراتی در دستگاه ایجاد کند؟») — باید Yes بزنی. \
+             اگر آن پنجره را اصلاً ندیدی، یک‌بار برنامه را ببند و دوباره باز کن، بعد «نصب دوباره» را بزن.\n\
+             اگر Windows Defender چیزی را قرنطینه کرده باشد، معمولاً داخلِ log بالا نوشته می‌شود.",
+            log.display(),
+            if detail.is_empty() { "(خالی)" } else { &detail }
+        ));
     }
     Err(translate_helper_error(&detail))
 }
