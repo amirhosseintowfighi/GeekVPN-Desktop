@@ -79,8 +79,16 @@ fn copy_binaries() -> Result<(), String> {
     std::fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
     let tun_files: &[&str] = if cfg!(windows) { &[HEV_FILE, WINTUN_FILE, MSYS_FILE] } else { &[ENGINE_FILE] };
     for name in std::iter::once(HELPER_FILE).chain(tun_files.iter().copied()) {
-        let src = find_source(from, name)
-            .ok_or_else(|| format!("{} is missing (looked next to {} and in resources/binaries)", name, from.display()))?;
+        let src = find_source(from, name).ok_or_else(|| {
+            let tried = [
+                from.join(name),
+                from.join("binaries").join(name),
+                from.join("resources").join("binaries").join(name),
+                from.join("resources").join(name),
+            ];
+            let list = tried.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
+            format!("{} is missing (looked in: {}). exe dir: {}", name, list, from.display())
+        })?;
         // Copy beside, then rename: the old binary may still be mapped by a
         // process that is shutting down.
         let tmp = to.join(format!("{name}.new"));
@@ -96,32 +104,41 @@ fn copy_binaries() -> Result<(), String> {
 }
 
 fn find_source(from: &Path, name: &str) -> Option<std::path::PathBuf> {
-    // Tauri bundles `resources: ["binaries/wintun.dll", ...]` next to the exe
-    // (externalBin helpers sit beside the exe). On Windows wintun/msys are
-    // resources, not sidecars, so look in both places.
-    let direct = from.join(name);
-    if direct.exists() {
-        return Some(direct);
+    // Tauri bundles `resources: ["binaries/wintun.dll", ...]` — on Windows the
+    // resource lands at `<exe-dir>/binaries/<name>` (no `resources/` prefix),
+    // while some bundler versions use `<exe-dir>/resources/binaries/<name>`.
+    // Per-user NSIS installs put the exe at `.../AppData/Local/GeekVPN/`.
+    // Try every layout that has been observed, plus parent-dir fallbacks for
+    // the case where `from` is deep (e.g. `.../resources` itself).
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    // Beside the exe (externalBin) and the two resource layouts.
+    candidates.push(from.join(name));
+    candidates.push(from.join("binaries").join(name));
+    candidates.push(from.join("resources").join("binaries").join(name));
+    candidates.push(from.join("resources").join(name));
+    // One level up (resource_dir vs exe_dir difference, and `..` without canonicalize).
+    candidates.push(from.join("..").join(name));
+    candidates.push(from.join("..").join("binaries").join(name));
+    candidates.push(from.join("..").join("resources").join("binaries").join(name));
+    candidates.push(from.join("..").join("resources").join(name));
+    if let Some(parent) = from.parent() {
+        candidates.push(parent.join(name));
+        candidates.push(parent.join("binaries").join(name));
+        candidates.push(parent.join("resources").join("binaries").join(name));
+        candidates.push(parent.join("resources").join(name));
+        if let Some(grand) = parent.parent() {
+            candidates.push(grand.join("binaries").join(name));
+            candidates.push(grand.join("resources").join("binaries").join(name));
+        }
     }
-    let candidates = [
-        from.join("resources").join("binaries").join(name),
-        from.join("..").join("resources").join("binaries").join(name),
-    ];
     for c in candidates {
         if c.exists() {
             return Some(c);
         }
-        // `..` segment is literal without canonicalize; try normalized form.
         if let Ok(canonical) = c.canonicalize() {
             if canonical.exists() {
                 return Some(canonical);
             }
-        }
-    }
-    if let Some(parent) = from.parent() {
-        let r = parent.join("resources").join("binaries").join(name);
-        if r.exists() {
-            return Some(r);
         }
     }
     None

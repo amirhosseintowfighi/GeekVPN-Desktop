@@ -86,37 +86,38 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
 #[cfg(windows)]
 fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     use std::os::windows::process::CommandExt;
-    // If the app itself already runs as admin (کاربر «Run as administrator» زده)،
-    // مستقیم اجرا کن تا خطای واقعیِ helper دیده شود نه یک کد خروج گنگ.
-    if let Ok(out) = std::process::Command::new(helper)
-        .arg("install")
-        .creation_flags(0x0800_0000)
-        .output()
-    {
+    // تشخیص ادمین بودن بدون winapi اضافه: یک SCM بازِ آزمایشی.
+    // اگر ادمین نیستیم، اصلا تلاشِ مستقیم نکن — مستقیم برو سراغ UAC تا پیامِ
+    // winapiِ خام به کاربر نرسد.
+    let already_admin = {
+        #[allow(unused_imports)]
+        use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+        ServiceManager::local_computer(
+            None::<&str>,
+            ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE,
+        )
+        .is_ok()
+    };
+    if already_admin {
+        let out = std::process::Command::new(helper)
+            .arg("install")
+            .creation_flags(0x0800_0000)
+            .output()
+            .map_err(|e| e.to_string())?;
         if out.status.success() {
             return Ok(true);
         }
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        let detail = if !stderr.is_empty() { stderr } else { stdout };
-        let code = out.status.code().unwrap_or(-1);
-        // 5 = ACCESS_DENIED — یعنی UAC لازم است، پس به شاخه‌ی UAC می‌رویم.
-        // هر کد دیگری یعنی helper واقعا اجرا شد و دلیل را گفت (مثلا wintun.dll نیست).
-        let denied = code == 5 || detail.to_lowercase().contains("access is denied") || detail.contains("5)");
-        if !denied && !detail.is_empty() {
-            return Err(detail);
-        }
-        if !denied && detail.is_empty() {
-            return Err(format!("geekvpn-helper install با کد {code} تمام شد (بدون پیام)."));
-        }
+        let raw = if !stderr.is_empty() { stderr } else { stdout };
+        let detail = translate_helper_error(&raw);
+        return Err(detail);
     }
 
     let log = std::env::temp_dir().join("geekvpn-helper-install.log");
     let _ = std::fs::remove_file(&log);
     let log_str = log.to_string_lossy().replace('\'', "''");
     let path = helper.to_string_lossy().replace('\'', "''");
-    // ExecutionPolicy Bypass تا روی سیستم‌های سفت‌گیر هم اجرا شود؛
-    // خروجی helper به فایل log می‌رود تا متن خطا به UI برگردد.
     let command = format!(
         "$log='{log_str}'; try {{ $p = Start-Process -FilePath '{path}' -ArgumentList 'install' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -RedirectStandardError $log -RedirectStandardOutput $log; $c=$p.ExitCode }} catch {{ $_.Exception.Message | Out-File -Append $log; $c=1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; exit $c"
     );
@@ -143,11 +144,35 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     if detail.is_empty() {
         return Err("نصب سرویس انجام نشد. UAC را تایید کردی؟ اگر آنتی‌ویروس داری، اجازه بده geekvpn-helper اجرا شود، بعد دوباره «نصب دوباره» را بزن.".into());
     }
-    // UAC کنسل شده باشد، پیام پاورشل خیلی گنگ است — فارسی‌اش کن.
     if detail.to_lowercase().contains("operation was canceled") || detail.contains("1223") {
         return Err("نصب لغو شد — پنجره‌ی «آیا اجازه می‌دهید…» (UAC) تایید نشد. دوباره «نصب دوباره» را بزن و Yes را بزن.".into());
     }
-    Err(detail)
+    Err(translate_helper_error(&detail))
+}
+
+#[cfg(windows)]
+fn translate_helper_error(raw: &str) -> String {
+    let t = raw.trim();
+    if t.is_empty() {
+        return "نصب سرویس بدون پیام خطا تمام شد.".into();
+    }
+    // پیام‌های فنیِ ویندوز/helper را به فارسیِ قابلِ اقدام ترجمه کن.
+    if t.contains("wintun.dll is missing") || t.contains("msys-2.0.dll is missing") {
+        // ریشه‌ی مشکلِ دسته‌ی دومِ کاربر — DLLها کنارِ helper نیستند چون بیلدِ قدیمی نصب است.
+        let dll = if t.contains("wintun.dll") { "wintun.dll" } else { "msys-2.0.dll" };
+        return format!(
+            "فایل {dll} کنارِ سرویس پیدا نشد. این بیلدی که نصب کرده‌ای قدیمی‌ست — \
+             آخرین geekvpn-windows را از همین برنچ (f3eb9ff به بعد) دانلود و نصب کن، \
+             بعد دوباره «نصب دوباره» را بزن. (جزئیات: {t})"
+        );
+    }
+    if t.to_lowercase().contains("service manager") {
+        return format!(
+            "برای نصبِ سرویس دسترسیِ مدیر لازم است. برنامه را معمولی باز کن و «نصب دوباره» را بزن و در پنجره‌ی ویندوز Yes را بزن \
+             — یا یک PowerShell را Run as administrator کن و بزن: geekvpn-helper install  (جزئیات: {t})"
+        );
+    }
+    t.to_string()
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]

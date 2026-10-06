@@ -86,8 +86,23 @@ fn stop_and_wait(service: &windows_service::service::Service) {
 }
 
 pub fn install() -> Result<(), String> {
+    // کاربر بدون UAC این را زده باشد، به جای «service manager: unknown error …»
+    // یک پیام فارسی و راه‌حل بده. `is_admin` با تلاشِ باز کردنِ SCM می‌فهمیم.
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE)
-        .map_err(|e| format!("service manager: {e}"))?;
+        .map_err(|e| {
+            let s = e.to_string();
+            let low = s.to_lowercase();
+            if low.contains("access is denied") || low.contains("5)") || low.contains("0x5") || low.contains("denied") {
+                format!(
+                    "دسترسی مدیر لازم است: «نصب سرویس» را بدون «Run as administrator» زدی یا UAC را تایید نکردی. \
+                     برنامه را معمولی باز کن و در تنظیمات «نصب دوباره» را بزن و در پنجره‌ی ویندوز Yes را بزن \
+                     — یا یک PowerShell را Run as administrator کن و بزن: \"{}\" install  (جزئیات: service manager: {s})",
+                    std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "geekvpn-helper.exe".into())
+                )
+            } else {
+                format!("service manager: {s}")
+            }
+        })?;
     let access = ServiceAccess::QUERY_STATUS | ServiceAccess::START | ServiceAccess::STOP | ServiceAccess::CHANGE_CONFIG;
     let existing = manager.open_service(NAME, access).ok();
     if let Some(s) = &existing {
