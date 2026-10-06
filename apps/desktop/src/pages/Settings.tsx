@@ -51,9 +51,19 @@ function HelperCard() {
     setBusy(true);
     setError(null);
     try {
-      setStatus(await system.helperInstall());
+      const next = await system.helperInstall();
+      setStatus(next);
+      // بعد از نصبِ موفقِ helper جدید (مثلاً 80ea452+ که msys-2.0.dll را می‌آورد)
+      // اگر، به هر دلیلی، سرویس هنوز جواب ندهد، پیام را هم نشان بده.
+      if (next.state !== "ready") {
+        const msg = next.state === "outdated" ? `سرویس هنوز نسخه‌ی قدیمی‌ست (${next.version}) — دوباره امتحان کن.` : next.reason;
+        setError(msg);
+      }
     } catch (e) {
-      setError(errorText(e));
+      const m = errorText(e);
+      // اگر UAC کنسل شده باشد، پیام پاورشل خیلی فنی‌ست — توضیح فارسی اضافه کن
+      if (/1223|canceled/i.test(m)) setError(`${m} — UAC را تایید نکردی. دوباره بزن و Yes را بزن.`);
+      else setError(m);
     } finally {
       setBusy(false);
     }

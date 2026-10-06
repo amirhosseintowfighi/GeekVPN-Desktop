@@ -86,16 +86,68 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
 #[cfg(windows)]
 fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     use std::os::windows::process::CommandExt;
-    let path = helper.to_string_lossy().replace('\'', "''");
-    let command = format!(
-        "$p = Start-Process -FilePath '{path}' -ArgumentList 'install' -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode"
-    );
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+    // If the app itself already runs as admin (کاربر «Run as administrator» زده)،
+    // مستقیم اجرا کن تا خطای واقعیِ helper دیده شود نه یک کد خروج گنگ.
+    if let Ok(out) = std::process::Command::new(helper)
+        .arg("install")
         .creation_flags(0x0800_0000)
-        .status()
+        .output()
+    {
+        if out.status.success() {
+            return Ok(true);
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() { stderr } else { stdout };
+        let code = out.status.code().unwrap_or(-1);
+        // 5 = ACCESS_DENIED — یعنی UAC لازم است، پس به شاخه‌ی UAC می‌رویم.
+        // هر کد دیگری یعنی helper واقعا اجرا شد و دلیل را گفت (مثلا wintun.dll نیست).
+        let denied = code == 5 || detail.to_lowercase().contains("access is denied") || detail.contains("5)");
+        if !denied && !detail.is_empty() {
+            return Err(detail);
+        }
+        if !denied && detail.is_empty() {
+            return Err(format!("geekvpn-helper install با کد {code} تمام شد (بدون پیام)."));
+        }
+    }
+
+    let log = std::env::temp_dir().join("geekvpn-helper-install.log");
+    let _ = std::fs::remove_file(&log);
+    let log_str = log.to_string_lossy().replace('\'', "''");
+    let path = helper.to_string_lossy().replace('\'', "''");
+    // ExecutionPolicy Bypass تا روی سیستم‌های سفت‌گیر هم اجرا شود؛
+    // خروجی helper به فایل log می‌رود تا متن خطا به UI برگردد.
+    let command = format!(
+        "$log='{log_str}'; try {{ $p = Start-Process -FilePath '{path}' -ArgumentList 'install' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -RedirectStandardError $log -RedirectStandardOutput $log; $c=$p.ExitCode }} catch {{ $_.Exception.Message | Out-File -Append $log; $c=1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; exit $c"
+    );
+    let out = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &command])
+        .creation_flags(0x0800_0000)
+        .output()
         .map_err(|e| e.to_string())?;
-    Ok(status.success())
+    if out.status.success() {
+        return Ok(true);
+    }
+    let mut detail = String::new();
+    if let Ok(t) = std::fs::read_to_string(&log) {
+        if !t.trim().is_empty() {
+            detail = t.trim().to_string();
+        }
+    }
+    if detail.is_empty() {
+        detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    }
+    if detail.is_empty() {
+        detail = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    }
+    if detail.is_empty() {
+        return Err("نصب سرویس انجام نشد. UAC را تایید کردی؟ اگر آنتی‌ویروس داری، اجازه بده geekvpn-helper اجرا شود، بعد دوباره «نصب دوباره» را بزن.".into());
+    }
+    // UAC کنسل شده باشد، پیام پاورشل خیلی گنگ است — فارسی‌اش کن.
+    if detail.to_lowercase().contains("operation was canceled") || detail.contains("1223") {
+        return Err("نصب لغو شد — پنجره‌ی «آیا اجازه می‌دهید…» (UAC) تایید نشد. دوباره «نصب دوباره» را بزن و Yes را بزن.".into());
+    }
+    Err(detail)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
