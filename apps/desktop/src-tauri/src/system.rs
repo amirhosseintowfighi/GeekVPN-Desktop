@@ -116,9 +116,12 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     let log = std::env::temp_dir().join("geekvpn-helper-install.log");
     let _ = std::fs::remove_file(&log);
     let log_str = log.to_string_lossy().replace('\'', "''");
-    let path = helper.to_string_lossy().replace('\'', "''");
+    let helper_str = helper.to_string_lossy().replace('\'', "''");
+    // PowerShell 5.1: -Verb RunAs cannot use -RedirectStandard* (parameter
+    // set conflict → "parameter set cannot be resolved…"). Redirect inside
+    // the elevated cmd itself instead.
     let command = format!(
-        "$log='{log_str}'; try {{ $p = Start-Process -FilePath '{path}' -ArgumentList 'install' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -RedirectStandardError $log -RedirectStandardOutput $log; $c=$p.ExitCode }} catch {{ $_.Exception.Message | Out-File -Append $log; $c=1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; exit $c"
+        "$log='{log_str}'; $helper='{helper_str}'; try {{ $p = Start-Process -FilePath cmd.exe -ArgumentList \"/c `\"$helper`\" install > `\"$log`\" 2>&1\" -Verb RunAs -Wait -PassThru -WindowStyle Hidden; $c=$p.ExitCode }} catch {{ $_.Exception.Message | Out-File -Append $log; $c=1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; exit $c"
     );
     let out = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &command])
@@ -154,6 +157,15 @@ fn translate_helper_error(raw: &str) -> String {
     let t = raw.trim();
     if t.is_empty() {
         return "نصب سرویس بدون پیام خطا تمام شد.".into();
+    }
+    // PowerShell 5.1: ترکیب -Verb RunAs با -RedirectStandard* خطای parameter set می‌دهد.
+    // اگر هنوز این خطا دیده شد (بیلد قدیمی نصب است)، مستقیم بگو بیلد را عوض کند.
+    if t.contains("parameter set cannot be resolved") || t.contains("A positional parameter cannot be found") {
+        return format!(
+            "نصبِ UAC به‌خاطر باگِ بیلدِ قبلی انجام نشد (parameter set). \
+              آخرین geekvpn-windows را از Actions همین برنچ (35bb240 به بعد) دوباره دانلود و نصب کن، \
+              بعد «نصب دوباره» را بزن. (جزئیات: {t})"
+        );
     }
     // پیام‌های فنیِ ویندوز/helper را به فارسیِ قابلِ اقدام ترجمه کن.
     if t.contains("wintun.dll is missing") || t.contains("msys-2.0.dll is missing") {
