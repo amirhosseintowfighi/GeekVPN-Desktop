@@ -80,7 +80,12 @@ function HelperCard() {
           </span>
         </span>
         {ready ? (
-          <Badge tone="ok">آماده</Badge>
+          <>
+            <Badge tone="ok">آماده</Badge>
+            <Button kind="soft" icon="dl" height={38} disabled={busy} onClick={() => void install()}>
+              {busy ? "در حال نصب…" : "نصب دوباره"}
+            </Button>
+          </>
         ) : (
           <Button kind="action" icon="dl" height={38} disabled={busy || status === null} onClick={() => void install()}>
             {busy ? "در حال نصب…" : status?.state === "outdated" ? "نصب دوباره" : "نصب سرویس"}
