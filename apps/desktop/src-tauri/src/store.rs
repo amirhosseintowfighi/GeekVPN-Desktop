@@ -17,6 +17,10 @@ pub enum SourceKind {
     Account {
         subscription_id: String,
         tier: Option<String>,
+        /// The bot's category name, shown instead of the tier. Default for a
+        /// store written before it existed.
+        #[serde(default)]
+        category_name_fa: Option<String>,
         state: String,
         expires_at: Option<String>,
         quota_gib: Option<f64>,
@@ -385,6 +389,7 @@ mod wire {
         let acc = serde_json::to_value(SourceKind::Account {
             subscription_id: "x".into(),
             tier: None,
+            category_name_fa: None,
             state: "active".into(),
             expires_at: None,
             quota_gib: Some(40.0),
@@ -402,6 +407,7 @@ mod wire {
             kind: SourceKind::Account {
                 subscription_id: "x".into(),
                 tier: None,
+                category_name_fa: None,
                 state: "active".into(),
                 expires_at: None,
                 quota_gib: Some(40.0),

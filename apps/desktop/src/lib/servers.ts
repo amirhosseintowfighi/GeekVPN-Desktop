@@ -45,6 +45,8 @@ export type SourceKind =
       kind: "account";
       subscriptionId: string;
       tier: string | null;
+      /** The bot's category name; absent on a store saved before it existed. */
+      categoryNameFa?: string | null;
       state: string;
       expiresAt: string | null;
       quotaGib: number | null;
