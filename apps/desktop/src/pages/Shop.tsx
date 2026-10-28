@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Badge, Button, Segmented } from "../design-system/controls";
 import { Icon, type IconName } from "../design-system/Icon";
 import { Card, CardTitle, EmptyState, PageHeader } from "../design-system/layout";
-import { durationLabel, planGrid, shop, TIER_LABEL, toman, type CouponPreview, type PaymentStart, type Quote, type ShopView } from "../lib/account";
+import { durationLabel, planGrid, shop, toman, type CouponPreview, type PaymentStart, type Quote, type ShopView } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
@@ -47,7 +47,8 @@ export function Shop() {
   const paid = params.get("payment");
   const [data, setData] = useState<ShopView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [tier, setTier] = useState<string | null>(null);
+  // A category id: the bot's category is the "service type".
+  const [kind, setKind] = useState<string | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
   const [couponText, setCouponText] = useState("");
@@ -78,18 +79,18 @@ export function Shop() {
   }, [paid]);
 
   const grid = useMemo(() => planGrid(data?.store ?? null), [data]);
-  // The service being renewed decides the tier; otherwise the first on offer.
+  // The service being renewed decides the category; otherwise the first on offer.
   const renewing = servers?.sources.find((s) => s.kind === "account" && s.subscriptionId === renews);
   useEffect(() => {
-    if (!grid.tiers.length || (tier && grid.tiers.includes(tier))) return;
-    const wanted = renewing?.kind === "account" ? renewing.tier : null;
-    setTier(wanted && grid.tiers.includes(wanted) ? wanted : grid.tiers[0]!);
-  }, [grid, tier, renewing]);
-  const durations = tier ? grid.durations(tier) : [];
+    if (!grid.kinds.length || (kind && grid.kinds.includes(kind))) return;
+    const wanted = renewing?.kind === "account" ? grid.kindFor(renewing.categoryNameFa, renewing.tier) : null;
+    setKind(wanted ?? grid.kinds[0]!);
+  }, [grid, kind, renewing]);
+  const durations = kind ? grid.durations(kind) : [];
   useEffect(() => {
-    if (tier && (days === null || !durations.includes(days))) setDays(durations[0] ?? null);
-  }, [tier, durations, days]);
-  const volumes = tier && days !== null ? grid.volumes(tier, days) : [];
+    if (kind && (days === null || !durations.includes(days))) setDays(durations[0] ?? null);
+  }, [kind, durations, days]);
+  const volumes = kind && days !== null ? grid.volumes(kind, days) : [];
   useEffect(() => {
     if (!volumes.some((p) => p.planId === planId)) setPlanId((volumes.find((p) => p.isFeatured) ?? volumes[0])?.planId ?? null);
   }, [volumes, planId]);
@@ -190,7 +191,7 @@ export function Shop() {
   const shortOfWallet = method === "wallet" && balance !== null && quote !== null && balance < quote.total;
   const methods = [{ key: "wallet", labelFa: "کیف پول" }, ...(data?.methods ?? [])];
   const summary = plan
-    ? [TIER_LABEL[tier ?? ""] ?? tier, plan.quotaGib === null ? "نامحدود" : `${faDigits(plan.quotaGib)} گیگ`, `${faDigits(plan.durationDays)} روز`].join(" · ")
+    ? [kind ? grid.label(kind) : "", plan.quotaGib === null ? "نامحدود" : `${faDigits(plan.quotaGib)} گیگ`, `${faDigits(plan.durationDays)} روز`].join(" · ")
     : "";
 
   return (
@@ -221,19 +222,19 @@ export function Shop() {
 
       <div className="flex min-h-0 flex-1 gap-4">
         <Card className="min-w-0 flex-1 basis-0 overflow-y-auto" padding={20}>
-          <CardTitle title="نوع سرویس" subtitle={TIER_HINT[tier ?? ""] ?? ""} />
+          <CardTitle title="نوع سرویس" subtitle={TIER_HINT[(kind && grid.tierOf(kind)) ?? ""] ?? ""} />
           {data === null && !loadError ? (
             <span className="text-[13px] text-ink-2">در حال خواندن فروشگاه…</span>
-          ) : loadError ? null : grid.tiers.length === 0 ? (
+          ) : loadError ? null : grid.kinds.length === 0 ? (
             <span className="text-[13px] text-ink-2">الان سرویسی برای فروش نیست. کمی بعد سر بزن یا از پشتیبانی بپرس.</span>
           ) : (
             <>
               <Segmented
                 label="نوع سرویس"
                 height={46}
-                options={grid.tiers.map((t) => ({ value: t, label: TIER_LABEL[t] ?? t }))}
-                value={tier ?? grid.tiers[0]!}
-                onChange={setTier}
+                options={grid.kinds.map((k) => ({ value: k, label: grid.label(k) }))}
+                value={kind ?? grid.kinds[0]!}
+                onChange={setKind}
               />
               <span className="mt-1 text-[13px] font-extrabold text-ink">مدت اعتبار</span>
               <div role="radiogroup" aria-label="مدت اعتبار" className="flex gap-2">

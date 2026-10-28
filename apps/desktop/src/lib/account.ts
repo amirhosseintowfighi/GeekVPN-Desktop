@@ -236,10 +236,6 @@ export function durationLabel(days: number): string {
   return days % 30 === 0 ? `${fa.format(days / 30)} ماهه` : `${fa.format(days)} روزه`;
 }
 
-const TIER_ORDER = ["direct", "tunnel", "elite"];
-
-export const TIER_LABEL: Record<string, string> = { direct: "مستقیم", tunnel: "تونل", elite: "ویژه" };
-
 export const TICKET_STATE: Record<string, { label: string; tone: "ok" | "warn" | "link" | "bad" }> = {
   open: { label: "در انتظار پشتیبانی", tone: "link" },
   waiting: { label: "منتظر پاسخ تو", tone: "warn" },
@@ -256,23 +252,38 @@ export const TOPICS: readonly { value: TicketTopic; label: string }[] = [
 ];
 
 /**
- * The shop's three pickers (tier, then duration, then volume) over the
+ * The shop's three pickers (service type, then duration, then volume) over the
  * storefront's plans. Pure, so the picking is tested.
+ *
+ * The service type is the bot's category - its name is what the shop calls
+ * it - and every product in it contributes its plans. It used to be the
+ * product's tier, labelled with the model name (مستقیم/تونل/ویژه), and a shop
+ * whose volumes are separate products ("10GB", "20GB", "100GB") of one tier
+ * then showed every one of them under the same switch.
  */
 export function planGrid(store: Storefront | null) {
-  const products = store?.categories.flatMap((c) => c.products) ?? [];
-  const order = (t: string) => {
-    const i = TIER_ORDER.indexOf(t);
-    return i < 0 ? TIER_ORDER.length : i;
-  };
-  const tiers = [...new Set(products.filter((p) => p.plans.length).map((p) => p.tier))].sort((a, b) => order(a) - order(b));
-  const plansOf = (tier: string) => products.filter((p) => p.tier === tier).flatMap((p) => p.plans);
-  const durations = (tier: string) => [...new Set(plansOf(tier).map((p) => p.durationDays))].sort((a, b) => a - b);
-  const volumes = (tier: string, days: number) =>
-    plansOf(tier)
+  const categories = (store?.categories ?? [])
+    .map((c) => ({
+      id: c.categoryId,
+      label: c.nameFa,
+      tier: c.products.find((p) => p.plans.length)?.tier ?? null,
+      plans: c.products.flatMap((p) => p.plans),
+    }))
+    .filter((c) => c.plans.length);
+  const kinds = categories.map((c) => c.id);
+  const find = (kind: string) => categories.find((c) => c.id === kind);
+  const label = (kind: string) => find(kind)?.label ?? kind;
+  const tierOf = (kind: string) => find(kind)?.tier ?? null;
+  const plansOf = (kind: string) => find(kind)?.plans ?? [];
+  const durations = (kind: string) => [...new Set(plansOf(kind).map((p) => p.durationDays))].sort((a, b) => a - b);
+  const volumes = (kind: string, days: number) =>
+    plansOf(kind)
       .filter((p) => p.durationDays === days)
       .sort((a, b) => (a.quotaGib ?? Infinity) - (b.quotaGib ?? Infinity));
-  return { tiers, durations, volumes };
+  /** The category a renewed service belongs to: by its name, else by its tier. */
+  const kindFor = (name: string | null | undefined, tier: string | null | undefined) =>
+    categories.find((c) => name && c.label === name)?.id ?? categories.find((c) => tier && c.tier === tier)?.id ?? null;
+  return { kinds, label, tierOf, durations, volumes, kindFor };
 }
 
 export interface DayUsage {

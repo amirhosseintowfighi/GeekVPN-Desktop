@@ -48,7 +48,7 @@ function ServiceCard({ s }: { s: Extract<Source, { kind: "account" }> }) {
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="truncate text-base font-extrabold">{s.name}</span>
             <span className="text-[11px] text-ink-2">
-              {s.tier ? TIER_FA[s.tier] ?? s.tier : "لینک"} · {faDigits(s.links.length)} سرور
+              {s.categoryNameFa || (s.tier ? TIER_FA[s.tier] ?? s.tier : "لینک")} · {faDigits(s.links.length)} سرور
             </span>
           </span>
           <span className={`flex h-[26px] items-center gap-1.5 rounded-[9px] px-2.5 text-xs font-extrabold ${toneCls}`}>

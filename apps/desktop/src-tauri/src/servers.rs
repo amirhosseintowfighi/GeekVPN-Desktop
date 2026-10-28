@@ -130,6 +130,7 @@ pub async fn servers_refresh(
                 kind: SourceKind::Account {
                     subscription_id: card.subscription_id,
                     tier: card.tier,
+                    category_name_fa: card.category_name_fa,
                     state: card.state,
                     expires_at: card.expires_at.map(|d| d.to_rfc3339()),
                     quota_gib: card.quota_gib,
