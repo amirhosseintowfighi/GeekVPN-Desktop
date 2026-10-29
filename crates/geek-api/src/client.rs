@@ -7,8 +7,8 @@ use url::Url;
 
 use crate::error::ApiError;
 use crate::types::{
-    AppUser, DeviceInfo, LinkPoll, LinkStart, PasswordRequest, PollRequest, Problem, RefreshRequest, SignedIn,
-    SubscriptionCard, Tokens,
+    AppUser, DeviceInfo, LinkPoll, LinkStart, PasswordRequest, PollRequest, Problem,
+    RefreshRequest, SignedIn, SubscriptionCard, Tokens,
 };
 
 /// The server holds a waiting poll for up to 25 seconds
@@ -41,7 +41,11 @@ impl ApiClient {
             .build()
             .map_err(|e| ApiError::Network(e.to_string()))?;
         let bootstrap = crate::bootstrap::build_bootstrap_client(user_agent);
-        Ok(Self { http, bootstrap, base })
+        Ok(Self {
+            http,
+            bootstrap,
+            base,
+        })
     }
 
     /// For tests: inject a bootstrap client. Production uses `bootstrap.rs`.
@@ -52,7 +56,10 @@ impl ApiClient {
     }
 
     pub(crate) fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ApiError> {
-        let url = self.base.join(path).map_err(|e| ApiError::Decode(e.to_string()))?;
+        let url = self
+            .base
+            .join(path)
+            .map_err(|e| ApiError::Decode(e.to_string()))?;
         Ok(self.http.request(method, url).timeout(REQUEST_TIMEOUT))
     }
 
@@ -60,7 +67,11 @@ impl ApiClient {
     fn bootstrap_request(&self, method: Method, path: &str) -> Option<RequestBuilder> {
         let url = self.base.join(path).ok()?;
         let client = self.bootstrap.as_ref()?;
-        let timeout = if path.contains("link/poll") { POLL_TIMEOUT } else { REQUEST_TIMEOUT };
+        let timeout = if path.contains("link/poll") {
+            POLL_TIMEOUT
+        } else {
+            REQUEST_TIMEOUT
+        };
         Some(client.request(method, url).timeout(timeout))
     }
 
@@ -70,11 +81,17 @@ impl ApiClient {
     // arguments rather than cloning.
 
     pub async fn link_start(&self, device: &DeviceInfo) -> Result<LinkStart, ApiError> {
-        let direct = self.request(Method::POST, "api/app/auth/link/start")?.json(device);
+        let direct = self
+            .request(Method::POST, "api/app/auth/link/start")?
+            .json(device);
         match send(direct, Auth::None).await {
             Err(ApiError::Network(_)) => {
-                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/link/start") else {
-                    return Err(ApiError::Network("به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن.".into()));
+                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/link/start")
+                else {
+                    return Err(ApiError::Network(
+                        "به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن."
+                            .into(),
+                    ));
                 };
                 send(retry.json(device), Auth::None).await
             }
@@ -91,10 +108,16 @@ impl ApiClient {
             .json(&PollRequest { poll_token, wait });
         match send(direct, Auth::None).await {
             Err(ApiError::Network(_)) => {
-                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/link/poll") else {
-                    return Err(ApiError::Network("به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن.".into()));
+                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/link/poll")
+                else {
+                    return Err(ApiError::Network(
+                        "به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن."
+                            .into(),
+                    ));
                 };
-                let retry = retry.timeout(POLL_TIMEOUT).json(&PollRequest { poll_token, wait });
+                let retry = retry
+                    .timeout(POLL_TIMEOUT)
+                    .json(&PollRequest { poll_token, wait });
                 send(retry, Auth::None).await
             }
             other => other,
@@ -103,18 +126,29 @@ impl ApiClient {
 
     /// The username and password set in the bot (profile → «ورود به اپ با نام
     /// کاربری»). A wrong pair is a 401 whose Persian message says so.
-    pub async fn password_login(&self, username: &str, password: &str, device: &DeviceInfo) -> Result<SignedIn, ApiError> {
-        let direct = self.request(Method::POST, "api/app/auth/password")?.json(&PasswordRequest {
-            username,
-            password,
-            device_name: &device.device_name,
-            platform: &device.platform,
-            app_version: &device.app_version,
-        });
+    pub async fn password_login(
+        &self,
+        username: &str,
+        password: &str,
+        device: &DeviceInfo,
+    ) -> Result<SignedIn, ApiError> {
+        let direct = self
+            .request(Method::POST, "api/app/auth/password")?
+            .json(&PasswordRequest {
+                username,
+                password,
+                device_name: &device.device_name,
+                platform: &device.platform,
+                app_version: &device.app_version,
+            });
         match send(direct, Auth::None).await {
             Err(ApiError::Network(_)) => {
-                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/password") else {
-                    return Err(ApiError::Network("به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن.".into()));
+                let Some(retry) = self.bootstrap_request(Method::POST, "api/app/auth/password")
+                else {
+                    return Err(ApiError::Network(
+                        "به سرور GeekVPN وصل نشدیم. اتصال اینترنت را بررسی کن و دوباره امتحان کن."
+                            .into(),
+                    ));
                 };
                 let retry = retry.json(&PasswordRequest {
                     username,
@@ -141,17 +175,27 @@ impl ApiClient {
     }
 
     pub async fn logout(&self, access_token: &str) -> Result<(), ApiError> {
-        let req = self.request(Method::POST, "api/v1/auth/logout")?.bearer_auth(access_token);
-        send::<serde_json::Value>(req, Auth::Session).await.map(|_| ())
+        let req = self
+            .request(Method::POST, "api/v1/auth/logout")?
+            .bearer_auth(access_token);
+        send::<serde_json::Value>(req, Auth::Session)
+            .await
+            .map(|_| ())
     }
 
     pub async fn me(&self, access_token: &str) -> Result<AppUser, ApiError> {
-        let req = self.request(Method::GET, "api/v1/auth/me")?.bearer_auth(access_token);
+        let req = self
+            .request(Method::GET, "api/v1/auth/me")?
+            .bearer_auth(access_token);
         send(req, Auth::Session).await
     }
 
-    pub async fn subscriptions(&self, access_token: &str) -> Result<Vec<SubscriptionCard>, ApiError> {
-        self.get_json("api/miniapp/subscriptions", access_token).await
+    pub async fn subscriptions(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<SubscriptionCard>, ApiError> {
+        self.get_json("api/miniapp/subscriptions", access_token)
+            .await
     }
 
     /// A subscription's body: the panel's share links, usually base64. It is
@@ -164,7 +208,11 @@ impl ApiClient {
         }
         let resp = self.http.get(url).timeout(REQUEST_TIMEOUT).send().await?;
         if !resp.status().is_success() {
-            return Err(ApiError::Http { status: resp.status().as_u16(), title: "subscription".into(), message_fa: None });
+            return Err(ApiError::Http {
+                status: resp.status().as_u16(),
+                title: "subscription".into(),
+                message_fa: None,
+            });
         }
         // Reject obviously too-large bodies early via Content-Length.
         if let Some(len) = resp.content_length() {
@@ -172,7 +220,10 @@ impl ApiClient {
                 return Err(ApiError::Decode("subscription too large".into()));
             }
         }
-        let bytes = resp.bytes().await.map_err(|e| ApiError::Decode(e.to_string()))?;
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| ApiError::Decode(e.to_string()))?;
         if bytes.len() > 2 * 1024 * 1024 {
             return Err(ApiError::Decode("subscription too large".into()));
         }
@@ -180,7 +231,11 @@ impl ApiClient {
     }
 
     /// Any Mini App route (`/api/miniapp/...`) over the app's Bearer token.
-    pub async fn get_json<T: DeserializeOwned>(&self, path: &str, access_token: &str) -> Result<T, ApiError> {
+    pub async fn get_json<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        access_token: &str,
+    ) -> Result<T, ApiError> {
         let req = self.request(Method::GET, path)?.bearer_auth(access_token);
         send(req, Auth::Session).await
     }
@@ -191,7 +246,10 @@ impl ApiClient {
         access_token: &str,
         body: &B,
     ) -> Result<T, ApiError> {
-        let req = self.request(Method::POST, path)?.bearer_auth(access_token).json(body);
+        let req = self
+            .request(Method::POST, path)?
+            .bearer_auth(access_token)
+            .json(body);
         send(req, Auth::Session).await
     }
 }
@@ -213,7 +271,10 @@ async fn send<T: DeserializeOwned>(req: RequestBuilder, auth: Auth) -> Result<T,
     let resp = req.send().await?;
     let status = resp.status();
     if status.is_success() {
-        return resp.json::<T>().await.map_err(|e| ApiError::Decode(e.to_string()));
+        return resp
+            .json::<T>()
+            .await
+            .map_err(|e| ApiError::Decode(e.to_string()));
     }
     if status == StatusCode::TOO_MANY_REQUESTS {
         return Err(ApiError::RateLimited);

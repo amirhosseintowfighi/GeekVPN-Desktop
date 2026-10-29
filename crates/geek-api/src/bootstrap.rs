@@ -60,12 +60,14 @@ fn proxy_url() -> Option<String> {
     let user = decode(&USER_ENC);
     let pass = decode(&PASS_ENC);
     let scheme = decode(&SCHEME_ENC);
-    if host.is_empty() || port.is_empty() || user.is_empty() || pass.is_empty() || scheme.is_empty() {
+    if host.is_empty() || port.is_empty() || user.is_empty() || pass.is_empty() || scheme.is_empty()
+    {
         return None;
     }
     // Credentials are alphanumeric + '_' — no percent-encoding needed.
     // Build without a single `socks5h://` literal in the source.
-    let mut url = String::with_capacity(scheme.len() + user.len() + pass.len() + host.len() + port.len() + 2);
+    let mut url =
+        String::with_capacity(scheme.len() + user.len() + pass.len() + host.len() + port.len() + 2);
     url.push_str(&scheme);
     url.push_str(&user);
     url.push(':');
@@ -108,7 +110,10 @@ mod tests {
 
     #[test]
     fn no_plaintext_in_enc_constants() {
-        let raw = format!("{:?}{:?}{:?}{:?}{:?}", HOST_ENC, PORT_ENC, USER_ENC, PASS_ENC, SCHEME_ENC);
+        let raw = format!(
+            "{:?}{:?}{:?}{:?}{:?}",
+            HOST_ENC, PORT_ENC, USER_ENC, PASS_ENC, SCHEME_ENC
+        );
         assert!(!raw.contains("81"));
     }
 }

@@ -182,14 +182,24 @@ interface Buy {
   planId: string;
   coupon?: string | null;
   renews?: string | null;
+  /** A monthly volume the customer typed; `planId` is then the term's anchor. */
+  customGib?: number | null;
 }
 
 export const shop = {
   load: () => call<ShopView>("shop_load"),
-  quote: (b: Buy) => call<Quote>("shop_quote", { planId: b.planId, coupon: b.coupon ?? null, renews: b.renews ?? null }),
-  coupon: (planId: string, code: string) => call<CouponPreview>("shop_coupon", { planId, code }),
+  quote: (b: Buy) =>
+    call<Quote>("shop_quote", { planId: b.planId, coupon: b.coupon ?? null, renews: b.renews ?? null, customGib: b.customGib ?? null }),
+  coupon: (planId: string, code: string, customGib?: number | null) =>
+    call<CouponPreview>("shop_coupon", { planId, code, customGib: customGib ?? null }),
   checkout: (b: Buy, method: string) =>
-    call<PaymentStart>("shop_checkout", { planId: b.planId, coupon: b.coupon ?? null, renews: b.renews ?? null, method }),
+    call<PaymentStart>("shop_checkout", {
+      planId: b.planId,
+      coupon: b.coupon ?? null,
+      renews: b.renews ?? null,
+      customGib: b.customGib ?? null,
+      method,
+    }),
   openGateway: () => call<void>("shop_open_gateway"),
   pending: () => call<PaymentView[]>("shop_pending"),
   receipt: (paymentId: string, path: string) => call<void>("shop_receipt", { paymentId, path }),
@@ -284,6 +294,26 @@ export function planGrid(store: Storefront | null) {
   const kindFor = (name: string | null | undefined, tier: string | null | undefined) =>
     categories.find((c) => name && c.label === name)?.id ?? categories.find((c) => tier && c.tier === tier)?.id ?? null;
   return { kinds, label, tierOf, durations, volumes, kindFor };
+}
+
+type VolumePlan = { planId: string; planType: string; quotaGib: number | null; durationDays: number };
+
+/**
+ * A volume the customer types, for one term's packages: the smallest monthly
+ * figure it may be, and the package that names the term to the server.
+ * Null where the term sells nothing by volume. The server does the pricing -
+ * between the two nearest packages - and refuses below the floor itself.
+ */
+export function customVolume<P extends VolumePlan>(plans: P[]): { floor: number; anchor: P } | null {
+  const byVolume = plans.filter((p) => p.planType === "traffic" && p.quotaGib !== null && p.quotaGib > 0);
+  if (!byVolume.length) return null;
+  const floor = Math.min(...byVolume.map((p) => Math.ceil(((p.quotaGib ?? 0) * 30) / p.durationDays)));
+  return { floor, anchor: byVolume[0]! };
+}
+
+/** The term's allowance for a monthly volume, the server's own rule. */
+export function termGib(monthlyGib: number, days: number): number {
+  return Math.floor((monthlyGib * days) / 30);
 }
 
 export interface DayUsage {

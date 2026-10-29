@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Badge, Button, Segmented } from "../design-system/controls";
 import { Icon, type IconName } from "../design-system/Icon";
 import { Card, CardTitle, EmptyState, PageHeader } from "../design-system/layout";
-import { durationLabel, planGrid, shop, toman, type CouponPreview, type PaymentStart, type Quote, type ShopView } from "../lib/account";
+import { customVolume, durationLabel, planGrid, shop, termGib, toman, type CouponPreview, type PaymentStart, type Quote, type ShopView } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
@@ -51,6 +51,9 @@ export function Shop() {
   const [kind, setKind] = useState<string | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
+  // «دلخواه»: a monthly volume typed in place of a package.
+  const [custom, setCustom] = useState(false);
+  const [customText, setCustomText] = useState("");
   const [couponText, setCouponText] = useState("");
   const [coupon, setCoupon] = useState<CouponPreview | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -94,21 +97,32 @@ export function Shop() {
   useEffect(() => {
     if (!volumes.some((p) => p.planId === planId)) setPlanId((volumes.find((p) => p.isFeatured) ?? volumes[0])?.planId ?? null);
   }, [volumes, planId]);
-  const plan = volumes.find((p) => p.planId === planId) ?? null;
+  const offer = useMemo(() => customVolume(volumes), [volumes]);
+  const typed = Number.parseInt(customText.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))), 10);
+  const customGib = custom && offer && Number.isFinite(typed) && typed >= offer.floor && typed <= 10_000 ? typed : null;
+  useEffect(() => {
+    if (custom && !offer) setCustom(false);
+    if (custom && offer && customText === "") setCustomText(String(offer.floor));
+  }, [custom, offer, customText]);
+  const selected = volumes.find((p) => p.planId === planId) ?? null;
+  // In custom mode the term's anchor stands in for a package; what is shown
+  // and charged is the typed volume, priced by the server.
+  const plan = custom ? (offer?.anchor ?? null) : selected;
+  const buyId = custom ? (customGib !== null ? (offer?.anchor.planId ?? null) : null) : planId;
 
   const couponCode = coupon?.isValid ? coupon.code : null;
   useEffect(() => {
     setQuote(null);
-    if (!planId) return;
+    if (!buyId) return;
     let live = true;
-    shop.quote({ planId, coupon: couponCode, renews }).then(
+    shop.quote({ planId: buyId, coupon: couponCode, renews, customGib }).then(
       (q) => live && setQuote(q),
       (e) => live && setError(errorText(e)),
     );
     return () => {
       live = false;
     };
-  }, [planId, couponCode, renews]);
+  }, [buyId, couponCode, renews, customGib]);
   // The wallet first, unless it cannot cover this price and the customer
   // has not picked a method themselves.
   useEffect(() => {
@@ -117,7 +131,7 @@ export function Shop() {
     setMethod(short ? (data.methods[0]?.key ?? "wallet") : "wallet");
   }, [quote, data, methodChosen]);
   // A code checked for one plan says nothing about another.
-  useEffect(() => setCoupon(null), [planId]);
+  useEffect(() => setCoupon(null), [buyId, customGib]);
 
   if (!auth?.user) {
     return (
@@ -138,10 +152,10 @@ export function Shop() {
   }
 
   const checkCoupon = async () => {
-    if (!planId || !couponText.trim()) return;
+    if (!buyId || !couponText.trim()) return;
     setError(null);
     try {
-      setCoupon(await shop.coupon(planId, couponText));
+      setCoupon(await shop.coupon(buyId, couponText, customGib));
     } catch (e) {
       // An unknown code is refused with its reason; show it by the field.
       setCoupon({ code: couponText.trim(), isValid: false, discount: 0, totalAfter: 0, messageFa: errorText(e) });
@@ -149,11 +163,11 @@ export function Shop() {
   };
 
   const pay = async () => {
-    if (!planId) return;
+    if (!buyId) return;
     setBusy(true);
     setError(null);
     try {
-      const s = await shop.checkout({ planId, coupon: couponCode, renews }, method);
+      const s = await shop.checkout({ planId: buyId, coupon: couponCode, renews, customGib }, method);
       setStarted(s);
       if (s.kind === "done") void refresh();
     } catch (e) {
@@ -186,12 +200,17 @@ export function Shop() {
   };
 
   const balance = data?.store.walletBalance ?? null;
-  const total = quote?.total ?? plan?.price ?? 0;
-  const strike = quote && quote.totalDiscount > 0 ? quote.basePrice : plan?.compareAtPrice ?? null;
+  const total = quote?.total ?? (custom ? 0 : (plan?.price ?? 0));
+  const strike = quote && quote.totalDiscount > 0 ? quote.basePrice : custom ? null : (plan?.compareAtPrice ?? null);
   const shortOfWallet = method === "wallet" && balance !== null && quote !== null && balance < quote.total;
   const methods = [{ key: "wallet", labelFa: "کیف پول" }, ...(data?.methods ?? [])];
+  const shownGib = custom ? (customGib !== null && plan ? termGib(customGib, plan.durationDays) : null) : (plan?.quotaGib ?? null);
   const summary = plan
-    ? [kind ? grid.label(kind) : "", plan.quotaGib === null ? "نامحدود" : `${faDigits(plan.quotaGib)} گیگ`, `${faDigits(plan.durationDays)} روز`].join(" · ")
+    ? [
+        kind ? grid.label(kind) : "",
+        custom ? (shownGib === null ? "حجم دلخواه" : `${faDigits(shownGib)} گیگ (دلخواه)`) : plan.quotaGib === null ? "نامحدود" : `${faDigits(plan.quotaGib)} گیگ`,
+        `${faDigits(plan.durationDays)} روز`,
+      ].join(" · ")
     : "";
 
   return (
@@ -259,20 +278,23 @@ export function Shop() {
               </div>
               <div className="mt-1 flex items-center justify-between">
                 <span className="text-[13px] font-extrabold text-ink">حجم (گیگابایت)</span>
-                {plan?.compareAtPrice && plan.compareAtPrice > plan.price && (
+                {!custom && plan?.compareAtPrice && plan.compareAtPrice > plan.price && (
                   <Badge tone="ok">٪{faDigits(Math.round((1 - plan.price / plan.compareAtPrice) * 100))} تخفیف</Badge>
                 )}
               </div>
               <div role="radiogroup" aria-label="حجم" className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
                 {volumes.map((p) => {
-                  const on = p.planId === planId;
+                  const on = !custom && p.planId === planId;
                   return (
                     <button
                       key={p.planId}
                       type="button"
                       role="radio"
                       aria-checked={on}
-                      onClick={() => setPlanId(p.planId)}
+                      onClick={() => {
+                        setCustom(false);
+                        setPlanId(p.planId);
+                      }}
                       className={`flex h-14 flex-col items-center justify-center rounded-[13px] text-ink ${
                         on ? "border-2 border-link bg-soft" : "border border-chip-border bg-chip"
                       }`}
@@ -282,8 +304,41 @@ export function Shop() {
                     </button>
                   );
                 })}
+                {offer && (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={custom}
+                    onClick={() => setCustom(true)}
+                    className={`flex h-14 flex-col items-center justify-center rounded-[13px] text-ink ${
+                      custom ? "border-2 border-link bg-soft" : "border border-dashed border-chip-border bg-chip"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">دلخواه</span>
+                    <span className="text-[10px] text-ink-2">هر حجمی</span>
+                  </button>
+                )}
               </div>
-              {plan && (
+              {custom && offer && plan && (
+                <label className="flex flex-col gap-1.5 text-xs font-bold text-ink-2">
+                  چند گیگ در ماه؟
+                  <input
+                    dir="ltr"
+                    inputMode="numeric"
+                    value={customText}
+                    onChange={(e) => setCustomText(e.target.value.replace(/[^0-9۰-۹]/g, ""))}
+                    className={`${field} font-num`}
+                  />
+                  <span className={`font-normal ${customGib === null ? "text-bad" : "text-ink-2"}`}>
+                    {customGib === null
+                      ? `کمترین حجم ${faDigits(offer.floor)} گیگ در ماه است.`
+                      : plan.durationDays >= 45
+                        ? `ماهی ${faDigits(customGib)} گیگ × ${faDigits(Math.round(plan.durationDays / 30))} ماه = در مجموع ${faDigits(termGib(customGib, plan.durationDays))} گیگ؛ قیمت از روی بسته‌های همین مدت حساب می‌شود.`
+                        : "قیمت از روی بسته‌های همین مدت حساب می‌شود."}
+                  </span>
+                </label>
+              )}
+              {plan && !custom && (
                 <span className="text-xs leading-[1.8] text-ink-2">
                   {plan.nameFa}
                   {plan.deviceLimit > 0 && ` · ${faDigits(plan.deviceLimit)} دستگاه هم‌زمان`}
@@ -306,7 +361,7 @@ export function Shop() {
                     className={`${field} font-num`}
                   />
                 </label>
-                <Button kind="soft" onClick={() => void checkCoupon()} disabled={!couponText.trim() || !planId}>
+                <Button kind="soft" onClick={() => void checkCoupon()} disabled={!couponText.trim() || !buyId}>
                   بررسی
                 </Button>
               </div>

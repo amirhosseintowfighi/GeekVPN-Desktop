@@ -78,7 +78,7 @@ describe("connection figures", () => {
   });
 });
 
-import { durationLabel, planGrid, sizeFa, toman, usageSummary, type Storefront } from "./account";
+import { customVolume, durationLabel, planGrid, termGib, sizeFa, toman, usageSummary, type Storefront } from "./account";
 import { percent } from "../pages/Referral";
 
 describe("shop", () => {
@@ -191,5 +191,22 @@ describe("update notes", () => {
       "Kill Switch fix",
       "Split tunnel on macOS",
     ]);
+  });
+});
+
+describe("customVolume", () => {
+  const p = (id: string, q: number | null, days = 30, planType = "traffic") => ({ planId: id, planType, quotaGib: q, durationDays: days });
+
+  it("starts at the term's smallest monthly package and names it to the server", () => {
+    expect(customVolume([p("a", 10), p("b", 20)])).toEqual({ floor: 10, anchor: p("a", 10) });
+    expect(customVolume([p("q", 30, 90)])?.floor).toBe(10);
+  });
+
+  it("is not offered where nothing is sold by volume", () => {
+    expect(customVolume([p("u", null, 30, "unlimited")])).toBeNull();
+  });
+
+  it("carries the monthly volume into every month of the term", () => {
+    expect(termGib(35, 90)).toBe(105);
   });
 });
