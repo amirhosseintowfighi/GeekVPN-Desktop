@@ -61,13 +61,20 @@ pub async fn shop_load(app: AppHandle, auth: State<'_, AuthState>) -> Result<Sho
     })
 }
 
-fn purchase(plan_id: String, coupon: Option<String>, renews: Option<String>) -> Purchase {
+fn purchase(
+    plan_id: String,
+    coupon: Option<String>,
+    renews: Option<String>,
+    custom_gib: Option<u32>,
+) -> Purchase {
     Purchase {
         plan_id,
         coupon_code: coupon
             .map(|c| c.trim().to_string())
             .filter(|c| !c.is_empty()),
         renews_subscription_id: renews.filter(|r| !r.is_empty()),
+        // The server refuses past 10 000 too; zero is never a volume.
+        custom_gib: custom_gib.filter(|g| (1..=10_000).contains(g)),
     }
 }
 
@@ -78,8 +85,9 @@ pub async fn shop_quote(
     plan_id: String,
     coupon: Option<String>,
     renews: Option<String>,
+    custom_gib: Option<u32>,
 ) -> Result<Quote, String> {
-    let p = purchase(plan_id, coupon, renews);
+    let p = purchase(plan_id, coupon, renews, custom_gib);
     call(&app, &auth, |api, t| {
         let p = p.clone();
         async move { api.quote(&t, &p).await }
@@ -93,6 +101,7 @@ pub async fn shop_coupon(
     auth: State<'_, AuthState>,
     plan_id: String,
     code: String,
+    custom_gib: Option<u32>,
 ) -> Result<CouponPreview, String> {
     let code = code.trim().to_string();
     if code.is_empty() || code.len() > 64 {
@@ -100,7 +109,7 @@ pub async fn shop_coupon(
     }
     call(&app, &auth, |api, t| {
         let (plan_id, code) = (plan_id.clone(), code.clone());
-        async move { api.coupon_preview(&t, &plan_id, &code).await }
+        async move { api.coupon_preview(&t, &plan_id, &code, custom_gib).await }
     })
     .await
 }
@@ -139,12 +148,13 @@ pub async fn shop_checkout(
     plan_id: String,
     coupon: Option<String>,
     renews: Option<String>,
+    custom_gib: Option<u32>,
     method: String,
 ) -> Result<PaymentStart, String> {
     if !is_method_key(&method) {
         return Err("روش پرداخت را انتخاب کن.".into());
     }
-    let p = purchase(plan_id, coupon, renews);
+    let p = purchase(plan_id, coupon, renews, custom_gib);
     let start = call(&app, &auth, |api, t| {
         let (p, method) = (p.clone(), method.clone());
         async move { api.checkout(&t, &p, &method).await }
