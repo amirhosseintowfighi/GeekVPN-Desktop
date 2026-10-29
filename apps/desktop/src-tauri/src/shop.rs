@@ -140,6 +140,9 @@ fn safe_url(u: &str) -> bool {
         .is_ok_and(|u| u.scheme() == "https" || (cfg!(debug_assertions) && u.scheme() == "http"))
 }
 
+// Each argument is a named field of the UI's `invoke` call; bundling them in
+// a struct would only rename that call's keys.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn shop_checkout(
     app: AppHandle,
