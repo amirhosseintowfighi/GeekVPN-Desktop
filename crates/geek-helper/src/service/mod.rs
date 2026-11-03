@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use crate::paths::{self, ENGINE_FILE, HELPER_FILE};
+use crate::paths::{self, ENGINE_FILE, HELPER_FILE, HEV_FILE, MSYS_FILE, WINTUN_FILE};
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -65,8 +65,9 @@ pub fn uninstall() -> Result<(), String> {
     Err("no service support on this system".into())
 }
 
-/// Copies the helper and sing-box from beside the running executable into
-/// the install directory, unless we already run from there.
+/// Copies the helper and its TUN engine from beside the running executable
+/// (or from the app's resources directory on Windows) into the install
+/// directory, unless we already run from there.
 #[allow(dead_code)]
 fn copy_binaries() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -76,11 +77,18 @@ fn copy_binaries() -> Result<(), String> {
         return Ok(());
     }
     std::fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
-    for name in [HELPER_FILE, ENGINE_FILE] {
-        let src = from.join(name);
-        if !src.exists() {
-            return Err(format!("{} is missing", src.display()));
-        }
+    let tun_files: &[&str] = if cfg!(windows) { &[HEV_FILE, WINTUN_FILE, MSYS_FILE] } else { &[ENGINE_FILE] };
+    for name in std::iter::once(HELPER_FILE).chain(tun_files.iter().copied()) {
+        let src = find_source(from, name).ok_or_else(|| {
+            let tried = [
+                from.join(name),
+                from.join("binaries").join(name),
+                from.join("resources").join("binaries").join(name),
+                from.join("resources").join(name),
+            ];
+            let list = tried.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
+            format!("{} is missing (looked in: {}). exe dir: {}", name, list, from.display())
+        })?;
         // Copy beside, then rename: the old binary may still be mapped by a
         // process that is shutting down.
         let tmp = to.join(format!("{name}.new"));
@@ -93,6 +101,47 @@ fn copy_binaries() -> Result<(), String> {
         std::fs::rename(&tmp, to.join(name)).map_err(|e| format!("{}: {e}", to.join(name).display()))?;
     }
     Ok(())
+}
+
+fn find_source(from: &Path, name: &str) -> Option<std::path::PathBuf> {
+    // Tauri bundles `resources: ["binaries/wintun.dll", ...]` — on Windows the
+    // resource lands at `<exe-dir>/binaries/<name>` (no `resources/` prefix),
+    // while some bundler versions use `<exe-dir>/resources/binaries/<name>`.
+    // Per-user NSIS installs put the exe at `.../AppData/Local/GeekVPN/`.
+    // Try every layout that has been observed, plus parent-dir fallbacks for
+    // the case where `from` is deep (e.g. `.../resources` itself).
+    let mut candidates = vec![
+        from.join(name),
+        from.join("binaries").join(name),
+        from.join("resources").join("binaries").join(name),
+        from.join("resources").join(name),
+        // One level up (resource_dir vs exe_dir difference, and `..` without canonicalize).
+        from.join("..").join(name),
+        from.join("..").join("binaries").join(name),
+        from.join("..").join("resources").join("binaries").join(name),
+        from.join("..").join("resources").join(name),
+    ];
+    if let Some(parent) = from.parent() {
+        candidates.push(parent.join(name));
+        candidates.push(parent.join("binaries").join(name));
+        candidates.push(parent.join("resources").join("binaries").join(name));
+        candidates.push(parent.join("resources").join(name));
+        if let Some(grand) = parent.parent() {
+            candidates.push(grand.join("binaries").join(name));
+            candidates.push(grand.join("resources").join("binaries").join(name));
+        }
+    }
+    for c in candidates {
+        if c.exists() {
+            return Some(c);
+        }
+        if let Ok(canonical) = c.canonicalize() {
+            if canonical.exists() {
+                return Some(canonical);
+            }
+        }
+    }
+    None
 }
 
 fn same_dir(a: &Path, b: &Path) -> bool {

@@ -17,6 +17,10 @@ pub enum SourceKind {
     Account {
         subscription_id: String,
         tier: Option<String>,
+        /// The bot's category name, shown instead of the tier. Default for a
+        /// store written before it existed.
+        #[serde(default)]
+        category_name_fa: Option<String>,
         state: String,
         expires_at: Option<String>,
         quota_gib: Option<f64>,
@@ -201,15 +205,28 @@ impl Store {
         Self { path, data }
     }
 
-    /// Written atomically (temp file, then rename): a crash mid-write must
-    /// not cost the user their server list.
+    /// Written atomically (temp file, fsync, then rename): a crash or power
+    /// cut mid-write must not cost the user their server list.
     pub fn save(&self) -> Result<(), String> {
         let tmp = self.path.with_extension("json.tmp");
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
         let bytes = serde_json::to_vec_pretty(&self.data).map_err(|e| e.to_string())?;
-        std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+        {
+            let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+            use std::io::Write;
+            f.write_all(&bytes).map_err(|e| e.to_string())?;
+            f.sync_all().map_err(|e| e.to_string())?;
+        }
+        // On Windows `rename` is not atomic if the target exists; replace
+        // explicitly. On Unix it already is.
+        #[cfg(windows)]
+        {
+            // `ReplaceFileW` semantics via `std::fs::rename` already handles
+            // overwrite on Windows 10+, but ensure the temp is flushed first
+            // (done above). Keep it simple: just rename.
+        }
         std::fs::rename(&tmp, &self.path).map_err(|e| e.to_string())
     }
 
@@ -372,6 +389,7 @@ mod wire {
         let acc = serde_json::to_value(SourceKind::Account {
             subscription_id: "x".into(),
             tier: None,
+            category_name_fa: None,
             state: "active".into(),
             expires_at: None,
             quota_gib: Some(40.0),
@@ -389,6 +407,7 @@ mod wire {
             kind: SourceKind::Account {
                 subscription_id: "x".into(),
                 tier: None,
+                category_name_fa: None,
                 state: "active".into(),
                 expires_at: None,
                 quota_gib: Some(40.0),

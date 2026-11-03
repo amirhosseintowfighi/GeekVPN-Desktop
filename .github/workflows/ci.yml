@@ -14,9 +14,9 @@ jobs:
     name: UI (typecheck, tests, build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -45,15 +45,24 @@ jobs:
             triple: universal-apple-darwin
             args: "--target universal-apple-darwin --bundles dmg"
     runs-on: ${{ matrix.os }}
+    env:
+      GEEK_ENV: prod
+      GEEK_API_BASE_PROD: ${{ secrets.GEEK_API_BASE_PROD }}
+      GEEK_API_BASE_STAGING: ${{ secrets.GEEK_API_BASE_STAGING }}
+      GEEK_BOT_USERNAME: ${{ vars.GEEK_BOT_USERNAME }}
+      GEEK_UPDATER_PUBKEY: ${{ vars.GEEK_UPDATER_PUBKEY }}
+      GEEK_RELEASE_REPO: ${{ github.repository }}
+      GEEK_BOOTSTRAP_PROXY: ${{ secrets.GEEK_BOOTSTRAP_PROXY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Linux build dependencies
         if: matrix.name == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -62,31 +71,71 @@ jobs:
           targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: core/geekcore/go.mod
           cache-dependency-path: core/geekcore/go.sum
+        env:
+          GOPROXY: ${{ vars.GOPROXY || 'https://proxy.golang.org,direct' }}
+          GOPRIVATE: github.com/amirhosseintowfighi/*
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # The engines, the helper and the geo data are sidecars and resources
       # of the bundle; tauri-build refuses to compile without them.
       - name: Build geekcore
         shell: bash
         run: scripts/build-geekcore.sh ${{ matrix.triple }}
       - name: Build sing-box
+        if: matrix.name != 'windows'
         shell: bash
         run: scripts/build-singbox.sh ${{ matrix.triple }}
+      - name: Fetch hev-socks5-tunnel + wintun + msys
+        if: matrix.name == 'windows'
+        shell: bash
+        run: scripts/fetch-hev.sh ${{ matrix.triple }}
       - name: Build geekvpn-helper
         shell: bash
         run: scripts/build-helper.sh ${{ matrix.triple }}
       - name: Geo data
         shell: bash
         run: scripts/fetch-geo.sh
+      - name: Ensure bundle sidecars exist (tauri-build checks every externalBin/resource)
+        shell: bash
+        run: |
+          BIN="apps/desktop/src-tauri/binaries"
+          mkdir -p "$BIN"
+          # tauri.conf lists both TUN engines and wintun.dll. Each OS only builds
+          # one engine, but `tauri_build` (run by `cargo clippy`) checks for the
+          # host triple's binaries, not the matrix triple. Create empty stubs for
+          # every combination so clippy passes on every runner.
+          stub() { [ -f "$1" ] || { echo "stub $1"; : > "$1"; }; }
+          for name in hev-socks5-tunnel geekvpn-sing-box geekcore geekvpn-helper; do
+            for triple in x86_64-unknown-linux-gnu x86_64-pc-windows-msvc x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-apple-darwin universal-apple-darwin; do
+              ext=""; case "$triple" in *windows*) ext=".exe" ;; esac
+              stub "$BIN/$name-$triple$ext"
+            done
+            stub "$BIN/$name"
+            stub "$BIN/$name.exe"
+          done
+          stub "$BIN/wintun.dll"
+          stub "$BIN/msys-2.0.dll"
+          for triple in x86_64-pc-windows-msvc x86_64-pc-windows-gnu x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin universal-apple-darwin; do
+            stub "$BIN/wintun-$triple.dll"
+            stub "$BIN/msys-2.0-$triple.dll"
+          done
+          ls -lh "$BIN" || true
       - run: pnpm install --frozen-lockfile
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Security audits
+        shell: bash
+        run: |
+          cargo install cargo-audit --locked 2>/dev/null || true
+          cargo audit || echo "::warning::cargo audit found advisories"
+          pnpm audit --audit-level high || echo "::warning::pnpm audit found advisories"
       # The e2e tests are #[ignore]d: they need a running GeekVPNBot.
       - run: cargo test --workspace
       # Unsigned until the signing secrets exist (docs/ARCHITECTURE.md §8).
       - run: pnpm -C apps/desktop tauri build ${{ matrix.args }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: geekvpn-${{ matrix.name }}
           path: |

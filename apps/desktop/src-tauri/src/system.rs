@@ -86,16 +86,66 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
 #[cfg(windows)]
 fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     use std::os::windows::process::CommandExt;
-    let path = helper.to_string_lossy().replace('\'', "''");
+    const NO_WINDOW: u32 = 0x0800_0000;
+    // Already an administrator (the SCM opens for creating services): no
+    // UAC prompt needed.
+    let already_admin = {
+        use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+        ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE).is_ok()
+    };
+    if already_admin {
+        let out = std::process::Command::new(helper).arg("install").creation_flags(NO_WINDOW).output().map_err(|e| e.to_string())?;
+        if out.status.success() {
+            return Ok(true);
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(translate_helper_error(stderr.trim()));
+    }
+
+    // The helper itself is elevated (no script in between); an elevated
+    // process has no console we can read, so it writes the outcome to a log.
+    let log = std::env::temp_dir().join(format!("geekvpn-helper-install-{}.log", std::process::id()));
+    let _ = std::fs::remove_file(&log);
+    let quote = |p: &std::path::Path| p.to_string_lossy().replace('\'', "''");
+    // Start-Process joins ArgumentList with spaces, so the log path carries
+    // its own double quotes.
     let command = format!(
-        "$p = Start-Process -FilePath '{path}' -ArgumentList 'install' -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode"
+        "try {{ $p = Start-Process -FilePath '{exe}' -ArgumentList @('install','--log','\"{log}\"') -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode }} catch {{ Write-Output $_.Exception.Message; exit 1223 }}",
+        exe = quote(helper),
+        log = quote(&log),
     );
-    let status = std::process::Command::new("powershell")
+    let out = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &command])
-        .creation_flags(0x0800_0000)
-        .status()
+        .creation_flags(NO_WINDOW)
+        .output()
         .map_err(|e| e.to_string())?;
-    Ok(status.success())
+    let written = std::fs::read_to_string(&log).unwrap_or_default();
+    let _ = std::fs::remove_file(&log);
+    if out.status.success() {
+        return Ok(true);
+    }
+    if out.status.code() == Some(1223) && written.trim().is_empty() {
+        return Err("نصب انجام نشد: پنجره‌ی اجازه‌ی ویندوز رد یا بسته شد. دوباره «نصب سرویس» را بزن و در آن پنجره Yes را انتخاب کن.".into());
+    }
+    Err(translate_helper_error(written.trim()))
+}
+
+/// The helper's English error as a sentence the customer can act on; the
+/// original stays in brackets for problem reports.
+#[cfg(windows)]
+fn translate_helper_error(raw: &str) -> String {
+    let t = raw.trim().trim_start_matches("geekvpn-helper:").trim();
+    if t.is_empty() {
+        return "نصب سرویس انجام نشد. برنامه را ببند، دوباره باز کن و «نصب سرویس» را بزن.".into();
+    }
+    if t.contains("wintun.dll") || t.contains("msys-2.0.dll") || t.contains("hev-socks5-tunnel") {
+        return format!("فایل‌های حالت TUN کنار برنامه کامل نیستند. نسخه‌ی تازه‌ی GeekVPN را دوباره نصب کن. ({t})");
+    }
+    let lower = t.to_lowercase();
+    if lower.contains("service manager") || lower.contains("access is denied") {
+        return format!("نصب سرویس دسترسی مدیر سیستم می‌خواهد. «نصب سرویس» را بزن و در پنجره‌ی ویندوز Yes را انتخاب کن. ({t})");
+    }
+    format!("نصب سرویس انجام نشد. ({t})")
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]

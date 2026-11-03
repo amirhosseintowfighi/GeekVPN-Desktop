@@ -80,6 +80,26 @@ pub fn tun_upstream_config(server: &Server, address_override: Option<&str>, upst
     })
 }
 
+/// Windows' TUN (hev) hands every packet to the core, and the core cannot
+/// send anything direct without it looping back into the TUN. What it can
+/// still honour is the customer's «مسدود» rules: they go before the
+/// catch-all, to a blackhole.
+pub fn with_block_rules(mut config: Value, rules: &[crate::rules::CustomRule]) -> Value {
+    let blocks: Vec<crate::rules::CustomRule> = rules.iter().filter(|r| r.action == crate::rules::RuleAction::Block).cloned().collect();
+    if blocks.is_empty() {
+        return config;
+    }
+    if let Some(outs) = config["outbounds"].as_array_mut() {
+        outs.push(json!({ "tag": "block", "protocol": "blackhole", "settings": {} }));
+    }
+    if let Some(list) = config["routing"]["rules"].as_array_mut() {
+        let mut ours = crate::rules::xray_rules(&blocks);
+        ours.append(list);
+        *list = ours;
+    }
+    config
+}
+
 /// Just the server, for the real-delay test: geekcore dials through the
 /// first outbound, no inbounds and no routing needed.
 pub fn delay_config(server: &Server, address_override: Option<&str>) -> Value {

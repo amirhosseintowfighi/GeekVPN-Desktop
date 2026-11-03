@@ -11,7 +11,7 @@ geek-api = { path = "../geek-api" }
 gethostname = "1"
 hex = "0.4"
 hmac = "0.12"
-machine-uid = "0.5"
+machine-uid = "0.6"
 serde_json = "1"
 sha2 = "0.10"
 

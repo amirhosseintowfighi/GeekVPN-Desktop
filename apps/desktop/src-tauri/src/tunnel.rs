@@ -241,13 +241,13 @@ impl Tunnel {
             let ports = local_ports();
             let config = match opts.mode {
                 Mode::Proxy => client_config(server, over.as_deref(), opts.route, &opts.rules, ports),
-                Mode::Tun => tun_upstream_config(server, over.as_deref(), &upstream),
+                Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, &opts.rules),
             };
             match self.try_one(&core, server, &config).await {
                 Ok(delay) => {
                     let brought_up = match &helper {
                         None => self.point_system_proxy(&config).await.map(|note| (note, false)),
-                        Some(h) => self.tun_up(h, &upstream, &opts).await.map(|()| (None, opts.kill_switch.is_some())),
+                        Some(h) => self.tun_up(h, &upstream, &opts, server, over.as_deref()).await.map(|()| (None, opts.kill_switch.is_some())),
                     };
                     let (note, kill_switch) = match brought_up {
                         Ok(x) => x,
@@ -320,10 +320,22 @@ impl Tunnel {
         }
     }
 
-    /// Hands sing-box (via the helper) the TUN spec for this connection.
-    async fn tun_up(&self, helper: &HelperClient, upstream: &Upstream, opts: &ConnectOptions) -> Result<(), String> {
+    /// Hands the helper the TUN spec for this connection.
+    /// `server` + `over` give the actual IP the engine will dial, so the
+    /// helper can add a bypass route for it (Windows hev has no per-process
+    /// routing: without this its own TCP loops through the TUN and the link
+    /// goes dead — the "internet cuts on TUN" bug).
+    async fn tun_up(
+        &self,
+        helper: &HelperClient,
+        upstream: &Upstream,
+        opts: &ConnectOptions,
+        server: &Server,
+        over: Option<&str>,
+    ) -> Result<(), String> {
         let direct = if opts.route == Route::Smart { self.iran().await? } else { RuleLists::default() };
         let core_path = self.binary.canonicalize().unwrap_or_else(|_| self.binary.clone());
+        let bypass = Self::tun_bypass(server, over).await;
         let spec = TunSpec {
             upstream: upstream.clone(),
             route: opts.route,
@@ -331,6 +343,7 @@ impl Tunnel {
             apps: opts.apps.clone(),
             core_paths: vec![core_path.to_string_lossy().into_owned()],
             rules: opts.rules.clone(),
+            bypass,
         };
         let info: TunInfo = helper
             .call(Request::TunStart { spec: Box::new(spec), kill_switch: opts.kill_switch }, Duration::from_secs(30))
@@ -338,6 +351,47 @@ impl Tunnel {
             .map_err(|e| helper_message(&e))?;
         *self.tun.lock().await = Some((info, opts.kill_switch.is_some_and(|k| k.strict)));
         Ok(())
+    }
+
+    async fn tun_bypass(server: &Server, over: Option<&str>) -> Vec<String> {
+        // `over` is the clean-IP chosen by the scanner (numeric). Prefer it.
+        if let Some(ip) = over {
+            let s = ip.trim();
+            if s.parse::<std::net::IpAddr>().is_ok() {
+                return vec![s.to_string()];
+            }
+        }
+        let addr = server.address.trim();
+        if addr.is_empty() { return vec![]; }
+        if addr.parse::<std::net::IpAddr>().is_ok() {
+            return vec![addr.to_string()];
+        }
+        // Domain (CDN-fronted WS/XHTTP etc.): hev's default routes (0.0.0.0/1)
+        // would otherwise send geekcore's own TCP to this domain back through
+        // the TUN, looping forever and cutting the internet. WFP App bypass
+        // does NOT change routing, so we must add a concrete /32 via the real
+        // gateway. Resolve the domain now (before TUN is up) and return those IPs.
+        let host = addr.trim_matches(|c| c == '[' || c == ']');
+        let port = server.port;
+        // tokio DNS; 3s cap so a bad DNS doesn't stall connect.
+        let addrs = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            tokio::net::lookup_host((host, port)),
+        )
+        .await;
+        if let Ok(Ok(iter)) = addrs {
+            let mut out: Vec<String> = iter.map(|sa| sa.ip().to_string()).collect();
+            out.sort_unstable();
+            out.dedup();
+            if !out.is_empty() {
+                // Prefer IPv4 first (most servers are v4); keep both.
+                return out;
+            }
+        }
+        // Fallback: could not resolve — let WFP App filter carry it, but log
+        // so the helper's `add_bypass` warning is visible.
+        eprintln!("geekvpn: tun_bypass could not resolve {host}, no bypass route");
+        vec![]
     }
 
     /// Iran's lists from the shipped geo files, read once.
@@ -368,7 +422,9 @@ impl Tunnel {
         let mut slot = self.proxy.lock().await;
         // Reconnecting: the saved snapshot is still the user's, keep it.
         if let Some(prev) = slot.as_ref() {
-            let _ = restore_system_proxy(prev);
+            if let Err(e) = restore_system_proxy(prev) {
+                eprintln!("geekvpn: restore_system_proxy (reconnect) failed: {e}");
+            }
         }
         let snap = match apply_system_proxy(&spec) {
             Ok(s) => s,
@@ -382,6 +438,11 @@ impl Tunnel {
         };
         if let Ok(bytes) = serde_json::to_vec(&snap) {
             let _ = std::fs::write(&self.snapshot_file, bytes);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&self.snapshot_file, std::fs::Permissions::from_mode(0o600));
+            }
         }
         *slot = Some(snap);
         Ok(None)
@@ -389,7 +450,9 @@ impl Tunnel {
 
     async fn release_system_proxy(&self) {
         if let Some(snap) = self.proxy.lock().await.take() {
-            let _ = restore_system_proxy(&snap);
+            if let Err(e) = restore_system_proxy(&snap) {
+                eprintln!("geekvpn: restore_system_proxy failed: {e}");
+            }
         }
         let _ = std::fs::remove_file(&self.snapshot_file);
     }
@@ -406,7 +469,9 @@ impl Tunnel {
             self.helper.lock().await.take();
             return;
         }
-        let _ = h.call::<serde_json::Value>(Request::TunStop, Duration::from_secs(10)).await;
+        if let Err(e) = h.call::<serde_json::Value>(Request::TunStop, Duration::from_secs(10)).await {
+            eprintln!("geekvpn: TunStop failed: {e}");
+        }
     }
 
     pub async fn disconnect(&self, app: &AppHandle) {
@@ -520,8 +585,21 @@ impl Tunnel {
         let core = self.core().await?;
         let config = match live.mode {
             Mode::Proxy => client_config(server, over, live.route, &live.rules, live.ports),
-            Mode::Tun => tun_upstream_config(server, over, &live.upstream),
+            Mode::Tun => tun_core_config(server, over, &live.upstream, &live.rules),
         };
+        if live.mode == Mode::Tun {
+            // The TUN's routes catch everything but the first server's
+            // addresses: the new one's must go around it too, or the core's
+            // own connection loops back into the tunnel (Windows).
+            let ips = Self::tun_bypass(server, over).await;
+            if !ips.is_empty() {
+                if let Ok((h, _)) = self.helper().await {
+                    if let Err(e) = h.call::<serde_json::Value>(Request::TunBypass { ips }, Duration::from_secs(10)).await {
+                        eprintln!("geekvpn: failover bypass not added: {e}");
+                    }
+                }
+            }
+        }
         match self.try_one(&core, server, &config).await {
             Ok(delay) => {
                 *self.live.lock().await = Some(Live { config, ..live });
@@ -628,6 +706,17 @@ fn free_port() -> u16 {
 }
 
 /// A random credential for the core's locked SOCKS inbound.
+/// The core behind the TUN. Where sing-box owns the TUN it does the routing;
+/// on Windows (hev) only the core can, and only block rules apply there.
+fn tun_core_config(server: &Server, over: Option<&str>, upstream: &Upstream, rules: &[CustomRule]) -> serde_json::Value {
+    let config = tun_upstream_config(server, over, upstream);
+    if cfg!(windows) {
+        geek_config::with_block_rules(config, rules)
+    } else {
+        config
+    }
+}
+
 fn token() -> String {
     uuid::Uuid::new_v4().simple().to_string()
 }

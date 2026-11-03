@@ -78,7 +78,7 @@ describe("connection figures", () => {
   });
 });
 
-import { durationLabel, planGrid, sizeFa, toman, usageSummary, type Storefront } from "./account";
+import { customVolume, durationLabel, planGrid, termGib, sizeFa, toman, usageSummary, type Storefront } from "./account";
 import { percent } from "../pages/Referral";
 
 describe("shop", () => {
@@ -117,12 +117,39 @@ describe("shop", () => {
     isFirstPurchase: true,
   };
 
-  it("offers only tiers that have plans, durations in order, volumes smallest first with unlimited last", () => {
+  it("offers only categories that have plans, durations in order, volumes smallest first with unlimited last", () => {
     const g = planGrid(store);
-    expect(g.tiers).toEqual(["direct", "elite"]);
-    expect(g.durations("direct")).toEqual([30, 90]);
-    expect(g.volumes("direct", 30).map((p) => p.planId)).toEqual(["d", "a", "b"]);
-    expect(planGrid(null).tiers).toEqual([]);
+    expect(g.kinds).toEqual(["c", "e"]);
+    expect(g.durations("c")).toEqual([30, 90]);
+    expect(g.volumes("c", 30).map((p) => p.planId)).toEqual(["d", "a", "b"]);
+    expect(planGrid(null).kinds).toEqual([]);
+  });
+
+  it("names the service type as the bot's category and pools every product's volumes", () => {
+    // One category, its volumes sold as separate products of one tier - the
+    // shop that showed a single volume.
+    const shop: Storefront = {
+      ...store,
+      categories: [
+        {
+          categoryId: "eu",
+          nameFa: "اروپا",
+          icon: null,
+          products: [product("direct", [plan("v100", 30, 100)]), product("direct", [plan("v10", 30, 10)]), product("direct", [plan("v20", 30, 20)])],
+        },
+      ],
+    };
+    const g = planGrid(shop);
+    expect(g.kinds.map(g.label)).toEqual(["اروپا"]);
+    expect(g.volumes("eu", 30).map((p) => p.planId)).toEqual(["v10", "v20", "v100"]);
+    expect(g.tierOf("eu")).toBe("direct");
+  });
+
+  it("finds the category of a renewed service by name, then by tier", () => {
+    const g = planGrid(store);
+    expect(g.kindFor("e", null)).toBe("e");
+    expect(g.kindFor(null, "elite")).toBe("e");
+    expect(g.kindFor("gone", null)).toBeNull();
   });
 
   it("writes money, durations and shares in Persian", () => {
@@ -164,5 +191,22 @@ describe("update notes", () => {
       "Kill Switch fix",
       "Split tunnel on macOS",
     ]);
+  });
+});
+
+describe("customVolume", () => {
+  const p = (id: string, q: number | null, days = 30, planType = "traffic") => ({ planId: id, planType, quotaGib: q, durationDays: days });
+
+  it("starts at the term's smallest monthly package and names it to the server", () => {
+    expect(customVolume([p("a", 10), p("b", 20)])).toEqual({ floor: 10, anchor: p("a", 10) });
+    expect(customVolume([p("q", 30, 90)])?.floor).toBe(10);
+  });
+
+  it("is not offered where nothing is sold by volume", () => {
+    expect(customVolume([p("u", null, 30, "unlimited")])).toBeNull();
+  });
+
+  it("carries the monthly volume into every month of the term", () => {
+    expect(termGib(35, 90)).toBe(105);
   });
 });

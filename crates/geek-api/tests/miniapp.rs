@@ -4,7 +4,9 @@
 use geek_api::{ApiClient, ApiError, PaymentStart, Purchase};
 use serde_json::{json, Value};
 use url::Url;
-use wiremock::matchers::{body_bytes, body_json, header, method, path, query_param};
+use wiremock::matchers::{
+    body_bytes, body_json, body_partial_json, header, method, path, query_param,
+};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn fixture(name: &str) -> Value {
@@ -84,7 +86,7 @@ async fn storefront_quote_and_coupon_read_the_servers_shapes() {
     assert!(quote.lines[1].is_deduction);
 
     let coupon = api
-        .coupon_preview("T", &purchase().plan_id, "NOPE")
+        .coupon_preview("T", &purchase().plan_id, "NOPE", None)
         .await
         .unwrap();
     assert!(!coupon.is_valid);
@@ -302,4 +304,27 @@ async fn tickets_threads_and_replies() {
         .await
         .unwrap();
     assert_eq!(opened.reference, "SUP-1405-000040");
+}
+
+#[tokio::test]
+async fn a_typed_volume_travels_with_the_quote_and_the_checkout() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/miniapp/quote"))
+        .and(body_partial_json(json!({ "customGib": 35 })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "planId": "00000000-0000-0000-0000-000000000002",
+            "basePrice": 290000, "total": 290000, "lines": [],
+            "compareAtPrice": null, "campaignLabel": null, "couponCode": null
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let api = client(&server);
+    let custom = Purchase {
+        custom_gib: Some(35),
+        ..purchase()
+    };
+    let quote = api.quote("T", &custom).await.unwrap();
+    assert_eq!(quote.total, 290000);
 }

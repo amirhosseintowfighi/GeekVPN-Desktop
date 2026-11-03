@@ -67,6 +67,10 @@ pub struct TunSpec {
     /// The customer's own domain and address rules, after the apps'.
     #[serde(default)]
     pub rules: Vec<CustomRule>,
+    /// Server IPs that must bypass the TUN (Windows: route via gateway,
+    /// otherwise Xray's own connection loops through hev).
+    #[serde(default)]
+    pub bypass: Vec<String>,
 }
 
 /// What the helper decides on its own about the machine.

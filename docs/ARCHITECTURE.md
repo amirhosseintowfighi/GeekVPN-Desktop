@@ -82,10 +82,10 @@ sing-box در هر دو حالت جلوی geekcore است تا **فقط یک پ�
 | کار | پیاده‌سازی |
 |---|---|
 | System Proxy | WinINet: `InternetSetOptionW(INTERNET_OPTION_PER_CONNECTION_OPTION)` + `INTERNET_OPTION_SETTINGS_CHANGED` / `REFRESH`. per-user است، پس از خود اپ انجام می‌شود (بدون admin). مقدار قبلی ذخیره و بعد از قطع برمی‌گردد. bypass: `localhost;127.*;10.*;172.16.*…;192.168.*;<local>`. |
-| TUN | sing-box با `wintun.dll` (امضاشده توسط WireGuard LLC، کنار باینری). نیاز به SYSTEM → helper به‌صورت Windows Service (نصب با MSI/NSIS). |
+| TUN | **hev-socks5-tunnel** با `wintun.dll` (و `msys-2.0.dll`) کنار helper؛ آداپتور «GeekVPN» را helper می‌سازد، مسیرهای `0.0.0.0/1` و `128.0.0.0/1` را به آن می‌دهد و آدرس سرور (و سرور بعدی در failover، با `TunBypass`) را از کنار تونل رد می‌کند. hev فقط بسته‌ها را به socks هسته می‌دهد، پس در TUN ویندوز «ایران مستقیم»، تونل برنامه‌ای و قانون‌های «مستقیم» اعمال نمی‌شوند؛ قانون‌های «مسدود» در خود هسته (Xray) اعمال می‌شوند و اپ این را در صفحه‌ی تونل تفکیکی می‌گوید. نیاز به SYSTEM → helper به‌صورت Windows Service. |
 | DNS | `strict_route` در sing-box با WFP جلوی DNS روی کارت‌های دیگر را می‌گیرد. |
 | Kill Switch | WFP از helper (`FwpmEngineOpen0`، sublayer اختصاصی، فیلترهای **غیر-dynamic** تا با کرش هسته نمانند ولی با خاموشی helper پاک نشوند): اجازه فقط به loopback، کارت TUN، IP سرورهای فعلی (بعد از override اسکنر)، DHCP/NDP و در صورت انتخاب کاربر LAN. بقیه block. |
-| Per-App | `process_path` در sing-box (فقط حالت TUN). |
+| Per-App | در TUN ویندوز (hev) پشتیبانی نمی‌شود؛ اپ گزینه را غیرفعال نشان می‌دهد. |
 
 ### macOS (Intel + Apple Silicon، باینری universal)
 | کار | پیاده‌سازی |
@@ -474,3 +474,12 @@ GeekVPN-Desktop/
   - بسته‌ای که با امضا جور نبود رد شد و برنامه دست نخورد.
   - لینک بازگشت پرداخت از یک اجرای دوم به برنامه‌ی در حال اجرا رسید و فروشگاه را با «پرداخت تأیید شد» باز کرد.
 - **آنچه تست نشده**: نصب‌کننده‌ی ویندوز و مک و امضا و notarize واقعی، چون گواهی‌ها هنوز وجود ندارند. workflow انتشار هم تا اولین tag اجرا نشده.
+
+## بازبینی امنیتی (پس از فاز ۶)
+
+- پروکسی bootstrap ورود اول دیگر در سورس نیست: از Secret `GEEK_BOOTSTRAP_PROXY` (مثل `socks5h://user:pass@host:port`) در زمان بیلد خوانده و مبهم‌شده در باینری گذاشته می‌شود؛ بیلد بدون آن پروکسی پشتیبان ندارد.
+- helper نام کاربری/رمز socks داخلی را فقط به‌صورت توکن ساده (حروف، عدد، `-`، `_`) می‌پذیرد، پس در YAML موتور hev چیزی تزریق نمی‌شود؛ UDP در hev به‌صورت `udp` (UDP واقعی روی socks) می‌رود.
+- استثنای Kill Switch فقط برای فایل اجرایی `geekcore` است، نه هر مسیری که کلاینت بفرستد.
+- نصب helper در ویندوز خود helper را با UAC بالا می‌برد (`install --log <file>`)؛ فایل cmd موقت نیست.
+- فایل‌های فقط-ویندوز (hev، wintun، msys) در `tauri.windows.conf.json` هستند و در بسته‌ی لینوکس و مک نمی‌آیند.
+- لینک اشتراک http هم پذیرفته می‌شود و بدنه با سقف ۲ مگابایت تکه‌تکه خوانده می‌شود.

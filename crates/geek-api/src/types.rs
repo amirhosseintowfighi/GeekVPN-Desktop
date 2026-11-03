@@ -133,4 +133,8 @@ pub struct SubscriptionCard {
     pub remote_username: String,
     /// direct | tunnel | elite; None for a service adopted from a link.
     pub tier: Option<String>,
+    /// The bot's category for it ("اروپا"): what the customer bought it as.
+    /// Absent from servers older than the field.
+    #[serde(default)]
+    pub category_name_fa: Option<String>,
 }

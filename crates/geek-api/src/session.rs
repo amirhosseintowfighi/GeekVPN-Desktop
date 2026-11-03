@@ -60,7 +60,12 @@ impl Session {
             Ok(s) => (s, None),
             Err(e) => (None, Some(e)),
         };
-        Self { api, store, state: Mutex::new(initial), store_error: std::sync::Mutex::new(err) }
+        Self {
+            api,
+            store,
+            state: Mutex::new(initial),
+            store_error: std::sync::Mutex::new(err),
+        }
     }
 
     pub fn api(&self) -> &ApiClient {
@@ -85,7 +90,12 @@ impl Session {
     /// local half always happens: a sign-out that fails offline must still
     /// sign out.
     pub async fn sign_out(&self) {
-        let token = self.state.lock().await.as_ref().map(|s| s.tokens.access_token.clone());
+        let token = self
+            .state
+            .lock()
+            .await
+            .as_ref()
+            .map(|s| s.tokens.access_token.clone());
         if let Some(token) = token {
             let _ = self.api.logout(&token).await;
         }
@@ -114,7 +124,10 @@ impl Session {
         let refresh_token = current.tokens.refresh_token.clone();
         match self.api.refresh(&refresh_token).await {
             Ok(tokens) => {
-                let next = SignedIn { tokens, user: current.user.clone() };
+                let next = SignedIn {
+                    tokens,
+                    user: current.user.clone(),
+                };
                 let access = next.tokens.access_token.clone();
                 self.persist(&next);
                 *guard = Some(next);
@@ -154,11 +167,12 @@ impl Session {
     /// Re-reads the profile, which also proves the session still stands.
     pub async fn refresh_user(&self) -> Result<AppUser, SessionError> {
         let api = self.api.clone();
-        let user = self.authorized(|t| {
-            let api = api.clone();
-            async move { api.me(&t).await }
-        })
-        .await?;
+        let user = self
+            .authorized(|t| {
+                let api = api.clone();
+                async move { api.me(&t).await }
+            })
+            .await?;
         let mut guard = self.state.lock().await;
         if let Some(s) = guard.as_mut() {
             s.user = user.clone();

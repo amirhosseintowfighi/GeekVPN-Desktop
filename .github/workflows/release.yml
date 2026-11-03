@@ -11,6 +11,8 @@ name: Release
 #
 #   Secrets
 #     GEEK_API_BASE_PROD                  the backend, https://
+#     GEEK_BOOTSTRAP_PROXY                optional first-sign-in fallback,
+#                                         socks5h://user:pass@host:port
 #     TAURI_SIGNING_PRIVATE_KEY           `pnpm tauri signer generate`
 #     TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 #     WINDOWS_CERTIFICATE                 Authenticode .pfx, base64
@@ -56,6 +58,7 @@ jobs:
       GEEK_BOT_USERNAME: ${{ vars.GEEK_BOT_USERNAME }}
       GEEK_UPDATER_PUBKEY: ${{ vars.GEEK_UPDATER_PUBKEY }}
       GEEK_RELEASE_REPO: ${{ github.repository }}
+      GEEK_BOOTSTRAP_PROXY: ${{ secrets.GEEK_BOOTSTRAP_PROXY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -68,7 +71,7 @@ jobs:
       APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check the configuration
         shell: bash
@@ -87,7 +90,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf rpm
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -95,7 +98,7 @@ jobs:
         with:
           targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: core/geekcore/go.mod
           cache-dependency-path: core/geekcore/go.sum
@@ -103,8 +106,13 @@ jobs:
         shell: bash
         run: scripts/build-geekcore.sh ${{ matrix.triple }}
       - name: Build sing-box
+        if: matrix.name != 'windows'
         shell: bash
         run: scripts/build-singbox.sh ${{ matrix.triple }}
+      - name: Fetch hev-socks5-tunnel + wintun + msys
+        if: matrix.name == 'windows'
+        shell: bash
+        run: scripts/fetch-hev.sh ${{ matrix.triple }}
       - name: Build geekvpn-helper
         shell: bash
         run: scripts/build-helper.sh ${{ matrix.triple }}
@@ -133,7 +141,7 @@ jobs:
           node scripts/release-config.mjs "$version" > "$RUNNER_TEMP/release.conf.json"
           cat "$RUNNER_TEMP/release.conf.json"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}

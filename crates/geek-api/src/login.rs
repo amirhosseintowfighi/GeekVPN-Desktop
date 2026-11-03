@@ -53,7 +53,9 @@ pub async fn wait_for_approval(
                     LinkStatus::Expired => return Ok(LinkOutcome::Expired),
                     LinkStatus::Approved => {
                         return match (p.tokens, p.user) {
-                            (Some(tokens), Some(user)) => Ok(LinkOutcome::Approved(Box::new(SignedIn { tokens, user }))),
+                            (Some(tokens), Some(user)) => {
+                                Ok(LinkOutcome::Approved(Box::new(SignedIn { tokens, user })))
+                            }
                             _ => Err(ApiError::Decode("approved without tokens".into())),
                         };
                     }
@@ -82,11 +84,21 @@ pub fn telegram_app_link(deep_link: &str) -> Option<String> {
         return None;
     }
     let domain = url.path().trim_matches('/');
-    if domain.is_empty() || !domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+    if domain.is_empty()
+        || !domain
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
         return None;
     }
-    let start = url.query_pairs().find(|(k, _)| k == "start").map(|(_, v)| v.into_owned())?;
-    if !start.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    let start = url
+        .query_pairs()
+        .find(|(k, _)| k == "start")
+        .map(|(_, v)| v.into_owned())?;
+    if !start
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
         return None;
     }
     Some(format!("tg://resolve?domain={domain}&start={start}"))
@@ -106,9 +118,15 @@ mod tests {
 
     #[test]
     fn refuses_anything_else() {
-        assert_eq!(telegram_app_link("https://evil.example/GeekVPNBot?start=x"), None);
+        assert_eq!(
+            telegram_app_link("https://evil.example/GeekVPNBot?start=x"),
+            None
+        );
         assert_eq!(telegram_app_link("https://t.me/Geek&x=1?start=a"), None);
-        assert_eq!(telegram_app_link("https://t.me/GeekVPNBot?start=a%26b"), None);
+        assert_eq!(
+            telegram_app_link("https://t.me/GeekVPNBot?start=a%26b"),
+            None
+        );
         assert_eq!(telegram_app_link("https://t.me/GeekVPNBot"), None);
     }
 }

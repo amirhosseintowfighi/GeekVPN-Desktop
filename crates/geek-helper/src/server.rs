@@ -60,13 +60,21 @@ impl Shared {
             Request::Hello => json!(Hello { protocol: PROTOCOL, version: env!("CARGO_PKG_VERSION").into(), sing_box: engine::version() }),
             Request::Status => json!(Status { tun: self.tun.as_ref().map(|(_, r)| r.info.clone()), kill_switch: self.kill_switch }),
             Request::TunStart { spec, kill_switch } => {
+                if !engine::safe_credential(&spec.upstream.username) || !engine::safe_credential(&spec.upstream.password) {
+                    return Err(HelperError::new(ErrorCode::BadRequest, "upstream credentials must be plain tokens"));
+                }
                 let engine_bin = paths::engine_binary();
+                // Any client of the pipe may send this, so only GeekVPN's own
+                // core gets past the kill switch: not whatever path it names.
+                let extra_apps: Vec<String> = spec.core_paths.iter().filter(|p| is_core_binary(p)).cloned().collect();
                 // Firewall first: from here on nothing leaks, including while
                 // the old tunnel goes down and the new one comes up.
                 match kill_switch {
                     Some(ks) => {
                         let known = (!cfg!(target_os = "macos")).then_some(TUN_NAME);
-                        self.firewall.engage(&ks, known, &engine_bin).map_err(|e| HelperError::new(ErrorCode::Firewall, e))?;
+                        self.firewall
+                            .engage_with_apps(&ks, known, &engine_bin, &extra_apps)
+                            .map_err(|e| HelperError::new(ErrorCode::Firewall, e))?;
                         self.kill_switch = Some(ks);
                     }
                     None if self.kill_switch.is_some() => self.release_kill_switch()?,
@@ -80,7 +88,7 @@ impl Shared {
                     // Now that the device exists, let its packets through
                     // where the rules name it (macOS's utunN, Windows' LUID).
                     self.firewall
-                        .engage(&ks, Some(&running.info.interface), &engine_bin)
+                        .engage_with_apps(&ks, Some(&running.info.interface), &engine_bin, &extra_apps)
                         .map_err(|e| HelperError::new(ErrorCode::Firewall, e))?;
                 }
                 let info = running.info.clone();
@@ -95,6 +103,14 @@ impl Shared {
                 let r = self.release_kill_switch();
                 self.persist();
                 r?;
+                json!({})
+            }
+            Request::TunBypass { ips } => {
+                let ips: Vec<String> = ips.into_iter().filter(|ip| ip.trim().parse::<std::net::IpAddr>().is_ok()).collect();
+                match &self.tun {
+                    Some((owner, running)) if *owner == conn => running.add_bypass(&ips),
+                    _ => return Err(HelperError::new(ErrorCode::BadRequest, "no tunnel of yours is running")),
+                }
                 json!({})
             }
             Request::KillSwitchRelease => {
@@ -236,4 +252,34 @@ async fn connection(id: u64, stream: Box<dyn geek_ipc::Stream>, shared: Arc<Mute
     shared.lock().await.gone(id).await;
     drop(tx);
     let _ = writer.await;
+}
+
+/// A path that names GeekVPN's bundled core (`geekcore`, `geekcore.exe`, or
+/// the sidecar's `geekcore-<target>` name) and exists as a file.
+fn is_core_binary(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    let stem = name.strip_suffix(".exe").unwrap_or(name);
+    let named = stem == "geekcore" || stem.strip_prefix("geekcore-").is_some_and(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'));
+    named && p.is_absolute() && p.is_file()
+}
+
+#[cfg(test)]
+mod core_path_tests {
+    #[test]
+    fn only_the_core_is_exempt() {
+        let dir = std::env::temp_dir().join(format!("gv-core-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let core = dir.join("geekcore");
+        std::fs::write(&core, b"").unwrap();
+        let other = dir.join("firefox");
+        std::fs::write(&other, b"").unwrap();
+        assert!(super::is_core_binary(core.to_str().unwrap()));
+        assert!(!super::is_core_binary(other.to_str().unwrap()));
+        assert!(!super::is_core_binary(dir.join("geekcore-missing").to_str().unwrap()));
+        assert!(!super::is_core_binary("geekcore"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

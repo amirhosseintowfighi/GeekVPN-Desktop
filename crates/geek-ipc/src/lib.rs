@@ -38,6 +38,11 @@ pub enum Request {
     TunStop,
     /// Releases a kill switch left engaged (strict mode after a crash).
     KillSwitchRelease,
+    /// Failover moved the running tunnel's core to another server: its
+    /// addresses (IPs only) are routed around the TUN like the first one's.
+    /// Added without a protocol bump: an older helper answers BadRequest,
+    /// which the app ignores.
+    TunBypass { ips: Vec<String> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

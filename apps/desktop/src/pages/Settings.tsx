@@ -51,9 +51,19 @@ function HelperCard() {
     setBusy(true);
     setError(null);
     try {
-      setStatus(await system.helperInstall());
+      const next = await system.helperInstall();
+      setStatus(next);
+      // بعد از نصبِ موفقِ helper جدید (مثلاً 80ea452+ که msys-2.0.dll را می‌آورد)
+      // اگر، به هر دلیلی، سرویس هنوز جواب ندهد، پیام را هم نشان بده.
+      if (next.state !== "ready") {
+        const msg = next.state === "outdated" ? `سرویس هنوز نسخه‌ی قدیمی‌ست (${next.version}) — دوباره امتحان کن.` : next.reason;
+        setError(msg);
+      }
     } catch (e) {
-      setError(errorText(e));
+      const m = errorText(e);
+      // اگر UAC کنسل شده باشد، پیام پاورشل خیلی فنی‌ست — توضیح فارسی اضافه کن
+      if (/1223|canceled/i.test(m)) setError(`${m} — UAC را تایید نکردی. دوباره بزن و Yes را بزن.`);
+      else setError(m);
     } finally {
       setBusy(false);
     }
@@ -69,14 +79,23 @@ function HelperCard() {
             {status === null
               ? "در حال بررسی…"
               : status.state === "ready"
-                ? `نصب و روشن · نسخه‌ی ${faDigits(status.version)} · sing-box ${faDigits(status.singBox)}`
+                ? (() => {
+                    const eng = status.singBox.trim();
+                    const engLabel = eng.toLowerCase().includes("hev") || eng.toLowerCase().includes("wintun") ? eng : `sing-box ${eng}`;
+                    return `نصب و روشن · نسخه‌ی ${faDigits(status.version)} · ${faDigits(engLabel)}`;
+                  })()
                 : status.state === "outdated"
                   ? "نسخه‌ی نصب‌شده با برنامه جور نیست؛ دوباره نصبش کن."
                   : "حالت TUN و Kill Switch به این سرویس نیاز دارند. یک بار با اجازه‌ی مدیر نصب می‌شود."}
           </span>
         </span>
         {ready ? (
-          <Badge tone="ok">آماده</Badge>
+          <>
+            <Badge tone="ok">آماده</Badge>
+            <Button kind="soft" icon="dl" height={38} disabled={busy} onClick={() => void install()}>
+              {busy ? "در حال نصب…" : "نصب دوباره"}
+            </Button>
+          </>
         ) : (
           <Button kind="action" icon="dl" height={38} disabled={busy || status === null} onClick={() => void install()}>
             {busy ? "در حال نصب…" : status?.state === "outdated" ? "نصب دوباره" : "نصب سرویس"}
@@ -84,8 +103,14 @@ function HelperCard() {
         )}
       </div>
       {error && (
-        <span role="alert" className="text-xs leading-[1.8] text-bad">
+        <span role="alert" className="whitespace-pre-line text-xs leading-[1.8] text-bad">
           {error}
+        </span>
+      )}
+      {ready && (
+        <span className="rounded-xl bg-white/10 px-3 py-2 text-[11px] leading-[1.8] text-ink-2">
+          نکته: در حالت TUN دستور <span dir="ltr" className="font-num">ping</span> (ICMP) از تونل رد نمی‌شود — طبیعی است و نشانه‌ی قطع بودن نیست.
+          برای تستِ اتصال از <span dir="ltr" className="font-num">curl https://ifconfig.me</span> یا سایت‌های «آی‌پی من چیست» استفاده کن.
         </span>
       )}
     </div>
@@ -124,7 +149,7 @@ export function Settings() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
       <PageHeader title="تنظیمات" subtitle="تغییرهای اتصال از اتصال بعدی اعمال می‌شوند" />
-      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto pb-2">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-y-auto pb-2 max-[1200px]:flex-col">
         <div className="flex min-w-0 flex-1 basis-0 flex-col gap-3.5">
           <Card padding={18}>
             <CardTitle title="حالت اتصال" subtitle={connected ? "با اتصال بعدی اعمال می‌شود" : undefined} />
@@ -206,7 +231,7 @@ export function Settings() {
           )}
         </div>
 
-        <div className="flex w-[300px] shrink-0 flex-col gap-3.5">
+        <div className="flex w-[300px] shrink-0 flex-col gap-3.5 max-[1200px]:w-full">
           <Card>
             <CardTitle title="ظاهر" subtitle="هماهنگ با سیستم، تم ویندوز، مک یا لینوکس را دنبال می‌کند" />
             <Segmented label="تم برنامه" options={THEMES} value={theme} onChange={pick} height={42} />

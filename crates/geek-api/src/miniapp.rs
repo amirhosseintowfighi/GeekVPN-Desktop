@@ -258,6 +258,8 @@ struct PlanRequest<'a> {
     renews_subscription_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     gateway_key: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_gib: Option<u32>,
 }
 
 /// What a checkout buys: a plan, maybe with a coupon, maybe renewing a
@@ -267,6 +269,9 @@ pub struct Purchase {
     pub plan_id: String,
     pub coupon_code: Option<String>,
     pub renews_subscription_id: Option<String>,
+    /// A monthly volume the customer typed. `plan_id` is then any package of
+    /// the same kind and term; the server prices off all of them.
+    pub custom_gib: Option<u32>,
 }
 
 impl Purchase {
@@ -276,6 +281,7 @@ impl Purchase {
             coupon_code: self.coupon_code.as_deref().filter(|c| !c.trim().is_empty()),
             renews_subscription_id: self.renews_subscription_id.as_deref(),
             gateway_key,
+            custom_gib: self.custom_gib,
         }
     }
 }
@@ -426,6 +432,8 @@ struct Txid<'a> {
 struct CouponRequest<'a> {
     plan_id: &'a str,
     code: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_gib: Option<u32>,
 }
 
 /// A receipt photo's type, from its first bytes: the server takes JPEG, PNG
@@ -472,11 +480,16 @@ impl ApiClient {
         token: &str,
         plan_id: &str,
         code: &str,
+        custom_gib: Option<u32>,
     ) -> Result<CouponPreview, ApiError> {
         self.post_json(
             "api/miniapp/coupon/preview",
             token,
-            &CouponRequest { plan_id, code },
+            &CouponRequest {
+                plan_id,
+                code,
+                custom_gib,
+            },
         )
         .await
     }

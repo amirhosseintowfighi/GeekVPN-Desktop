@@ -25,6 +25,6 @@ EXT=""; [[ "$TRIPLE" == *windows* ]] && EXT=".exe"
 
 cd "$ROOT"
 # shellcheck disable=SC2086
-cargo build $FLAG -p geek-helper --target "$TRIPLE"
+cargo build --locked $FLAG -p geek-helper --target "$TRIPLE"
 cp "target/$TRIPLE/$PROFILE/geekvpn-helper$EXT" "$BIN/geekvpn-helper-$TRIPLE$EXT"
 echo "built $BIN/geekvpn-helper-$TRIPLE$EXT"

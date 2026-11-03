@@ -45,9 +45,18 @@ function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; c
   };
   const pct = progress?.total ? Math.min(100, Math.round((progress.downloaded / progress.total) * 100)) : null;
   const canClose = !a?.required && !busy;
+  useEffect(() => {
+    // A required update, or one already downloading, can't be dismissed.
+    if (!canClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canClose, onClose]);
 
   return (
-    <div className="absolute inset-0 z-40 flex items-start justify-center bg-[rgba(3,27,51,0.6)] pt-[150px]" onClick={() => canClose && onClose()}>
+    <div className="absolute inset-0 z-40 flex items-start justify-center bg-[rgba(3,27,51,0.6)] pt-[150px]" onClick={() => canClose && onClose()} role="presentation">
       <div
         role="dialog"
         aria-modal="true"
