@@ -1,9 +1,35 @@
-import { NavLink } from "react-router";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router";
 import { Icon } from "../design-system/Icon";
-import { Logo } from "../design-system/Logo";
-import { NAV } from "../lib/nav";
+import { Lockup } from "../design-system/Logo";
+import { toman, wallet } from "../lib/account";
+import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
+import { NAV } from "../lib/nav";
 import { useUnread } from "../lib/useUnread";
+
+/** The customer at the foot of the rail: name and wallet balance. */
+function Who() {
+  const { view } = useAuth();
+  const user = view?.user ?? null;
+  const { pathname } = useLocation();
+  const [balance, setBalance] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user) return setBalance(null);
+    let alive = true;
+    // Re-read when the page changes: a purchase or top-up moves it.
+    wallet.load().then((w) => alive && setBalance(w.balance), () => {});
+    return () => {
+      alive = false;
+    };
+  }, [user, pathname]);
+  return (
+    <div className="flex flex-col gap-0.5 px-2.5 pt-3">
+      <span className="truncate text-[13px] font-bold">{user ? user.displayName || `کاربر ${faDigits(user.telegramId)}` : "مهمان"}</span>
+      <span className="text-xs text-ink-2">{user ? (balance === null ? "…" : `${toman(balance)} تومان`) : "وارد نشده‌ای"}</span>
+    </div>
+  );
+}
 
 /** The right-hand rail (Desktop-Home). */
 export function Sidebar() {
@@ -11,43 +37,38 @@ export function Sidebar() {
   return (
     <aside
       aria-label="ناوبری اصلی"
-      className="glass-clear absolute bottom-3.5 right-3.5 top-3.5 z-10 flex w-[92px] flex-col items-center gap-1.5 overflow-y-auto rounded-[26px] py-3 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]"
+      className="glass-milk flex w-[220px] shrink-0 flex-col gap-1 overflow-y-auto rounded-[30px] px-3 py-[22px] [scrollbar-width:none]"
     >
-      <span className="mb-1.5">
-        <Logo size={40} color="#FFFFFF" title="GeekVPN" />
-      </span>
+      <div className="px-2.5 pb-4">
+        <Lockup />
+      </div>
       {NAV.map((item, i) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === "/"}
-            title={`${item.label} (Ctrl+${i + 1})`}
-            className="flex w-[76px] flex-col items-center gap-1 no-underline"
-          >
-            {({ isActive }) => (
-              <>
-                <span
-                  className={`relative flex items-center justify-center transition-all ${
-                    isActive
-                      ? "glass-milk h-11 w-11 rounded-[14px]"
-                      : "h-10 w-10 rounded-[13px] bg-white/8 text-white hover:bg-white/15"
-                  }`}
-                >
-                  <Icon name={item.icon} size={21} />
-                  {item.path === "/support" && unread > 0 && (
-                    <span
-                      aria-label={`${faDigits(unread)} پیام خوانده‌نشده`}
-                      className="absolute -left-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-bad px-1 text-[10px] font-extrabold text-white"
-                    >
-                      {faDigits(unread)}
-                    </span>
-                  )}
-                </span>
-                <span className={`text-[10px] text-white ${isActive ? "font-extrabold" : "font-medium opacity-80"}`}>{item.label}</span>
-              </>
-            )}
-          </NavLink>
+        <NavLink
+          key={item.path}
+          to={item.path}
+          end={item.path === "/"}
+          title={`${item.label} (Ctrl+${i + 1})`}
+          className={({ isActive }) =>
+            `flex h-[42px] shrink-0 items-center gap-3 rounded-[21px] px-4 text-sm no-underline transition-colors ${
+              isActive ? "bg-white font-extrabold text-navy" : "font-semibold text-white/78 hover:bg-white/10"
+            }`
+          }
+        >
+          <Icon name={item.icon} size={18} />
+          <span className="flex-1">{item.label}</span>
+          {item.path === "/support" && unread > 0 && (
+            <span
+              aria-label={`${faDigits(unread)} پیام خوانده‌نشده`}
+              className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-light px-1 text-[10px] font-extrabold text-white"
+            >
+              {faDigits(unread)}
+            </span>
+          )}
+        </NavLink>
       ))}
+      <div className="flex-1" />
+      <div className="h-px shrink-0 bg-hair" />
+      <Who />
     </aside>
   );
 }

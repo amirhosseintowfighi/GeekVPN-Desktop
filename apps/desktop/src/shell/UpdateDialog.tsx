@@ -56,7 +56,7 @@ function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; c
   }, [canClose, onClose]);
 
   return (
-    <div className="absolute inset-0 z-40 flex items-start justify-center bg-[rgba(3,27,51,0.6)] pt-[150px]" onClick={() => canClose && onClose()} role="presentation">
+    <div className="absolute inset-0 z-40 flex items-start justify-center bg-[var(--gv-scrim)] pt-[150px]" onClick={() => canClose && onClose()} role="presentation">
       <div
         role="dialog"
         aria-modal="true"
@@ -65,8 +65,8 @@ function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; c
         className="glass-milk flex w-[480px] flex-col gap-3.5 rounded-[28px] p-6 text-ink"
       >
         <div className="flex items-center gap-3">
-          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl bg-logo">
-            <Logo size={34} color="#062845" title="" />
+          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-logo">
+            <Logo size={34} color="#07123A" title="" />
           </span>
           <span className="flex flex-1 flex-col">
             <span className="text-[19px] font-extrabold">
@@ -79,7 +79,7 @@ function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; c
             </span>
           </span>
           {canClose && (
-            <button type="button" aria-label="بستن" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-muted hover:bg-soft">
+            <button type="button" aria-label="بستن" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-soft">
               <Icon name="x" size={18} />
             </button>
           )}
@@ -112,8 +112,8 @@ function Dialog({ view, checking, error, onClose }: { view: UpdateView | null; c
                   <span>{pct === 100 ? "در حال نصب…" : `در حال دانلود${progress ? ` · ${megabytes(progress.downloaded)} مگابایت` : "…"}`}</span>
                   {pct !== null && <span>٪{faDigits(pct)}</span>}
                 </span>
-                <span className="h-2 overflow-hidden rounded bg-track">
-                  <span className="block h-full bg-link transition-[width]" style={{ width: `${pct ?? 8}%` }} />
+                <span className="h-[3px] overflow-hidden rounded-sm bg-white/16">
+                  <span className="block h-full bg-white transition-[width]" style={{ width: `${pct ?? 8}%` }} />
                 </span>
               </div>
             )}

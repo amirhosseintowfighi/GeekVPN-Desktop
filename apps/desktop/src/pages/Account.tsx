@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Badge, Button } from "../design-system/controls";
 import { Icon } from "../design-system/Icon";
-import { EmptyState, Group, PageHeader, Row } from "../design-system/layout";
+import { Card, EmptyState, Group, PageHeader, Row } from "../design-system/layout";
 import { referral, shop, support, toman, wallet, type PaymentMethod, type PaymentStart, type ReferralView, type Wallet, type WalletTransactions } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
@@ -42,7 +42,7 @@ function Topup({ methods, onDone }: { methods: PaymentMethod[]; onDone: () => vo
     }
   };
   return (
-    <section className="glass-milk flex flex-col gap-3 rounded-3xl p-4">
+    <section className="glass-milk flex flex-col gap-3 rounded-[26px] p-4">
       <span className="text-base font-extrabold text-ink">افزایش موجودی</span>
       <div className="grid grid-cols-4 gap-2">
         {PRESETS.map((p) => (
@@ -50,7 +50,7 @@ function Topup({ methods, onDone }: { methods: PaymentMethod[]; onDone: () => vo
             key={p}
             type="button"
             onClick={() => setAmount(String(p))}
-            className={`h-10 rounded-xl text-xs font-bold text-ink ${value === p ? "border-2 border-link bg-soft" : "border border-chip-border bg-chip"}`}
+            className={`h-10 rounded-full text-xs font-bold text-ink ${value === p ? "bg-white text-navy" : "border border-white/25 bg-white/7"}`}
           >
             {toman(p)}
           </button>
@@ -71,7 +71,7 @@ function Topup({ methods, onDone }: { methods: PaymentMethod[]; onDone: () => vo
               role="radio"
               aria-checked={m.key === method}
               onClick={() => setMethod(m.key)}
-              className={`h-9 rounded-xl px-3 text-xs font-bold ${m.key === method ? "bg-action text-on-action" : "border border-chip-border bg-chip text-ink"}`}
+              className={`h-9 rounded-full px-3 text-xs font-bold ${m.key === method ? "bg-action text-on-action" : "border border-white/25 bg-white/7 text-ink"}`}
             >
               {m.labelFa}
             </button>
@@ -99,7 +99,7 @@ function Transactions() {
   }, [page]);
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   return (
-    <section className="glass-milk flex max-h-[420px] flex-col overflow-hidden rounded-3xl">
+    <section className="glass-milk flex max-h-[420px] flex-col overflow-hidden rounded-[26px]">
       <div className="flex items-center gap-2 border-b border-hair px-4 py-3">
         <span className="flex-1 text-base font-extrabold text-ink">تراکنش‌ها</span>
         {pages > 1 && (
@@ -166,7 +166,7 @@ export function Account() {
   if (!user) {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <PageHeader title="حساب" />
+        <PageHeader micro="Account" title="حساب" />
         <EmptyState
           icon="user"
           title="وارد نشده‌ای"
@@ -194,68 +194,63 @@ export function Account() {
 
   const r = ref?.summary;
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-4">
-      <div className="flex items-center gap-3.5">
-        <span className="glass-clear flex h-16 w-16 items-center justify-center rounded-[21px]">
-          <Icon name="user" size={30} stroke={1.8} />
-        </span>
-        <span className="flex flex-1 flex-col gap-1.5">
-          <span className="text-[22px] font-extrabold">{user.displayName}</span>
-          <span className="flex h-[26px] items-center gap-1.5 self-start rounded-[9px] bg-white/18 px-2.5 text-xs font-bold">
-            <Icon name="plane" size={13} />
+    <div className="flex min-w-0 flex-1 flex-col gap-[18px]">
+      <PageHeader
+        micro="Account"
+        title={user.displayName || `کاربر ${faDigits(user.telegramId)}`}
+        subtitle={
+          <>
             متصل به تلگرام{user.username ? ` · @${user.username}` : ""} · شناسه <span dir="ltr">{faDigits(user.telegramId)}</span>
-          </span>
-        </span>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void leave()}
-          className="glass-clear flex h-[42px] items-center gap-2 rounded-[13px] px-3.5 text-[13px] font-bold disabled:opacity-60"
-        >
-          <Icon name="logout" size={17} />
-          {busy ? "در حال خروج…" : "خروج از حساب"}
-        </button>
-      </div>
+          </>
+        }
+        actions={
+          <button type="button" disabled={busy} onClick={() => void leave()} className="text-[13px] text-bad underline underline-offset-4 disabled:opacity-60">
+            {busy ? "در حال خروج…" : "خروج از حساب"}
+          </button>
+        }
+      />
       {error && (
-        <span role="alert" className="text-[13px]">
+        <span role="alert" className="text-[13px] text-bad">
           {error}
         </span>
       )}
       {view?.storeError && (
-        <div role="status" className="flex items-start gap-2 rounded-2xl bg-warn-soft px-3.5 py-3 text-[13px] leading-[1.8] text-warn">
+        <div role="status" className="flex items-start gap-2 text-[13px] leading-[1.8] text-warn">
           <Icon name="alert" size={18} />
           <span>{view.storeError}</span>
         </div>
       )}
-      <div className="flex min-h-0 flex-1 items-start gap-4 overflow-y-auto pb-2">
-        <div className="flex flex-1 basis-0 flex-col gap-3.5">
-          <section className="relative flex flex-col gap-3.5 overflow-hidden rounded-3xl bg-pay-bar p-[18px] text-white shadow-[0_14px_30px_rgba(2,24,56,0.35)]">
-            <span className="flex items-center gap-2 text-xs opacity-80">
-              <Icon name="wallet" size={16} />
-              موجودی کیف پول
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-2 pe-1 [scrollbar-width:thin]">
+        <div className="flex gap-4 max-[1100px]:flex-col">
+          <Card className="flex-1 basis-0">
+            <span className="micro text-[9px]">Wallet</span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-[34px] font-extrabold leading-none">{money ? toman(money.balance) : "…"}</span>
+              <span className="text-sm text-ink-2">تومان</span>
             </span>
-            <span className="text-[32px] font-extrabold leading-none">
-              {money ? toman(money.balance) : "…"} <span className="text-sm opacity-80">تومان</span>
-            </span>
-            {money && money.pendingCredit > 0 && <span className="text-xs opacity-80">{toman(money.pendingCredit)} تومان در راه</span>}
+            {money && money.pendingCredit > 0 && <span className="text-xs text-ink-2">{toman(money.pendingCredit)} تومان در راه</span>}
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPanel(panel === "topup" ? "none" : "topup")}
-                className="flex h-[46px] flex-1 items-center justify-center gap-1.5 rounded-[14px] bg-logo text-sm font-extrabold text-[#062845]"
-              >
-                <Icon name="plus" size={17} />
+              <Button icon="plus" height={40} aria-expanded={panel === "topup"} onClick={() => setPanel(panel === "topup" ? "none" : "topup")}>
                 افزایش موجودی
-              </button>
-              <button
-                type="button"
-                onClick={() => setPanel(panel === "history" ? "none" : "history")}
-                className="h-[46px] rounded-[14px] bg-white/12 px-4 text-[13px] font-bold"
-              >
+              </Button>
+              <Button kind="soft" height={40} aria-expanded={panel === "history"} onClick={() => setPanel(panel === "history" ? "none" : "history")}>
                 تراکنش‌ها
-              </button>
+              </Button>
             </div>
-          </section>
+          </Card>
+          <Card className="flex-1 basis-0">
+            <span className="micro text-[9px]">Referral</span>
+            <span className="text-lg font-extrabold">دعوت از دوستان</span>
+            <span className="text-xs text-ink-2">
+              {r ? `${faDigits(r.invitedCount)} دعوت · ${faDigits(r.convertedCount)} خرید · درآمد ${toman(r.totalEarned)} تومان` : "لینک دعوت و درآمدت"}
+            </span>
+            <div className="flex">
+              <Button kind="soft" icon="gift" height={40} onClick={() => navigate("/referral")}>
+                لینک دعوت
+              </Button>
+            </div>
+          </Card>
+        </div>
           {panel === "topup" && (
             <Topup
               methods={methods}
@@ -266,23 +261,15 @@ export function Account() {
             />
           )}
           {panel === "history" && <Transactions />}
-          <button type="button" onClick={() => navigate("/referral")} className="glass-clear flex items-center gap-3 rounded-[22px] px-4 py-3.5 text-start text-white">
-            <Icon name="gift" size={24} />
-            <span className="flex flex-1 flex-col">
-              <span className="text-[15px] font-extrabold">دعوت از دوستان</span>
-              <span className="text-xs opacity-90">
-                {r ? `${faDigits(r.invitedCount)} دعوت · ${faDigits(r.convertedCount)} خرید · درآمد ${toman(r.totalEarned)} تومان` : "لینک دعوت و درآمدت"}
-              </span>
-            </span>
-            <Icon name="chev" size={18} />
-          </button>
-          <Group label="ابزارها">
+        <div className="flex items-start gap-10 max-[1100px]:flex-col max-[1100px]:gap-5">
+        <div className="flex min-w-0 flex-1 basis-0 flex-col gap-4">
+          <Group micro="Tools">
             <Row icon="chart" title="مصرف روزانه" hint="ترافیک VPN همین کامپیوتر و هر سرویس" onClick={() => navigate("/usage")} />
             <Row icon="gauge" title="تست سرعت" hint="پینگ، دانلود و آپلود" onClick={() => navigate("/tools")} />
           </Group>
         </div>
-        <div className="flex flex-1 basis-0 flex-col gap-3.5">
-          <Group label="پشتیبانی">
+        <div className="flex min-w-0 flex-1 basis-0 flex-col gap-4">
+          <Group micro="Support">
             <Row
               icon="chat"
               title="تیکت‌های من"
@@ -291,8 +278,8 @@ export function Account() {
               trailing={
                 <span className="flex items-center gap-2">
                   {unread > 0 && <Badge tone="bad">{faDigits(unread)} جدید</Badge>}
-                  <span className="flex text-muted">
-                    <Icon name="chev" size={18} />
+                  <span className="flex text-ink-2">
+                    <Icon name="chev" size={16} />
                   </span>
                 </span>
               }
@@ -300,7 +287,7 @@ export function Account() {
             <Row icon="flag" title="گزارش مشکل" hint="یک گزارش فنی برای پشتیبانی می‌فرستد" onClick={() => navigate("/report")} />
             <Row icon="plane" title="ربات پشتیبانی" hint="گفتگو در تلگرام" onClick={() => void support.openBot().catch((e) => setError(errorText(e)))} />
           </Group>
-          <Group label="برنامه">
+          <Group micro="App">
             <Row
               icon="dl"
               title="به‌روزرسانی برنامه"
@@ -309,16 +296,17 @@ export function Account() {
               trailing={
                 <span className="flex items-center gap-2">
                   {newVersion && <Badge tone="link">جدید</Badge>}
-                  <span className="flex text-muted">
-                    <Icon name="chev" size={18} />
+                  <span className="flex text-ink-2">
+                    <Icon name="chev" size={16} />
                   </span>
                 </span>
               }
             />
           </Group>
-          <Group label="حساب تلگرام">
+          <Group micro="Telegram">
             <Row icon="gift" title="کد معرف" hint={<span dir="ltr" className="font-num">{user.referralCode}</span>} trailing={<span />} />
           </Group>
+        </div>
         </div>
       </div>
     </div>

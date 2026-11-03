@@ -15,7 +15,7 @@ export function Tools() {
   const [tab, setTab] = useState<Tab>("scan");
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-      <PageHeader title="ابزارها" subtitle="اسکنر IP تمیز، تست سرعت و لاگ هسته" />
+      <PageHeader micro="Tools" title="ابزارها" subtitle="اسکنر IP تمیز، تست سرعت و لاگ هسته" />
       <ClearChips
         options={[
           { value: "scan", label: "اسکنر و تست سرعت" },
@@ -68,7 +68,7 @@ function Scanner() {
     return () => void off.then((f) => f());
   }, [reload]);
 
-  if (!scan) return <section className="glass-milk flex-1 rounded-[26px]" />;
+  if (!scan) return <section className="flex-1" />;
   if (scan.candidates.length === 0) {
     return (
       <section className="glass-clear flex flex-1 flex-col rounded-[26px]">
@@ -117,9 +117,10 @@ function Scanner() {
 
   const cols = "grid grid-cols-[minmax(0,1.5fr)_70px_80px_70px_60px_90px_100px] items-center gap-2";
   return (
-    <section className="glass-milk flex min-w-0 flex-1 flex-col overflow-hidden rounded-[26px] text-ink">
-      <div className="flex flex-col gap-3 border-b border-hair p-4">
+    <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-hair pb-4">
         <CardTitle
+          micro="Cloudflare optimizer"
           title="بهینه‌ساز کلادفلر"
           subtitle="اسکن IP تمیز برای سرویس‌های مستقیم پشت CDN"
           actions={
@@ -141,7 +142,7 @@ function Scanner() {
               value={scan.serverId ?? ""}
               disabled={running}
               onChange={(e) => setServerId(e.target.value)}
-              className="h-9 min-w-0 flex-1 rounded-xl border border-chip-border bg-chip px-2 text-[13px] text-ink"
+              className="h-9 min-w-0 flex-1 rounded-full border border-white/25 bg-white/7 px-2 text-[13px] text-ink"
             >
               {scan.candidates.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -217,7 +218,7 @@ function Scanner() {
                 type="button"
                 disabled={inUse || running}
                 onClick={() => void use(r.ip)}
-                className={`h-[30px] rounded-[10px] text-xs font-bold ${inUse ? "bg-action text-on-action" : "bg-soft text-link"}`}
+                className={`h-[30px] rounded-full text-xs font-bold ${inUse ? "bg-action text-on-action" : "bg-soft text-link"}`}
               >
                 {inUse ? "در حال استفاده" : "استفاده"}
               </button>
@@ -286,11 +287,11 @@ function SpeedTest() {
 
   return (
     <Card className="w-[330px] shrink-0" padding={18}>
-      <CardTitle title="تست سرعت" subtitle={via} />
+      <CardTitle micro="Speed test" title="تست سرعت" subtitle={via} />
       <div className="relative h-[190px] w-[220px] self-center">
         <svg aria-hidden="true" width="220" height="220" viewBox="0 0 220 220" className="absolute right-0 top-0">
           <path d={arc(1)} fill="none" stroke="var(--color-track)" strokeWidth="14" strokeLinecap="round" />
-          {fill > 0 && <path d={arc(fill)} fill="none" stroke="var(--color-link)" strokeWidth="14" strokeLinecap="round" />}
+          {fill > 0 && <path d={arc(fill)} fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinecap="round" />}
         </svg>
         <div className="absolute inset-x-0 top-[70px] flex flex-col items-center">
           <span dir="ltr" className="font-num text-[40px] font-bold leading-none">
@@ -305,7 +306,7 @@ function SpeedTest() {
           ["لرزش", result?.jitterMs, "ms"],
           ["آپلود", result?.uploadMbps != null ? result.uploadMbps.toFixed(1) : null, "Mb/s"],
         ].map(([k, v, u]) => (
-          <div key={k as string} className="flex flex-1 flex-col gap-0.5 rounded-[14px] bg-soft-button p-2">
+          <div key={k as string} className="flex flex-1 flex-col gap-0.5 rounded-[18px] bg-soft-button p-2">
             <span className="text-[11px] text-ink-2">{k}</span>
             <span dir="ltr" className="font-num text-lg font-bold">
               {v ?? "—"}
@@ -356,7 +357,7 @@ function CoreLog() {
           </Button>
         }
       />
-      <pre dir="ltr" className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-2xl bg-chip p-3 text-left font-num text-[12px] leading-[1.7]">
+      <pre dir="ltr" className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-[18px] bg-chip p-3 text-left font-num text-[12px] leading-[1.7]">
         {log || "هنوز چیزی ثبت نشده."}
       </pre>
     </section>

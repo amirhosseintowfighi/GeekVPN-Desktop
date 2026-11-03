@@ -16,6 +16,7 @@
     "os:allow-platform",
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",
+    "dialog:allow-save",
     "core:window:allow-hide"
   ]
 }

@@ -5,7 +5,7 @@ import { Icon } from "../design-system/Icon";
 import { Card, CardTitle, PageHeader } from "../design-system/layout";
 import { errorText } from "../lib/auth";
 import { faDigits } from "../lib/fa";
-import { inTauri } from "../lib/platform";
+import { currentOs, inTauri } from "../lib/platform";
 import { servers, system, type AppMode, type CustomRule, type Program, type RuleAction } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 
@@ -57,7 +57,7 @@ function Rules({ rules }: { rules: CustomRule[] }) {
       <div className="-mx-1 flex max-h-[300px] flex-col gap-1.5 overflow-y-auto px-1">
         {rules.length === 0 && <span className="py-3 text-center text-[13px] text-ink-2">هنوز قانونی نداری.</span>}
         {rules.map((r) => (
-          <div key={r.value} className="flex items-center gap-2.5 rounded-[14px] bg-soft-button py-2 pe-1.5 ps-3">
+          <div key={r.value} className="flex items-center gap-2.5 rounded-[18px] bg-soft-button py-2 pe-1.5 ps-3">
             <span dir="ltr" className="min-w-0 flex-1 truncate text-right font-num text-[13px] font-bold text-ink">
               {r.value}
             </span>
@@ -74,7 +74,7 @@ function Rules({ rules }: { rules: CustomRule[] }) {
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void add()}
           placeholder="دامنه، IP یا CIDR"
-          className="h-11 rounded-[13px] border border-chip-border bg-chip px-3 font-num text-[13px] text-ink outline-none focus:border-link"
+          className="h-11 rounded-full border border-white/25 bg-white/7 px-3 font-num text-[13px] text-ink outline-none focus:border-link"
         />
       </label>
       <Segmented label="مسیر این قانون" options={RULE_ACTIONS} value={action} onChange={setAction} height={40} />
@@ -134,10 +134,10 @@ export function Split() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-      <PageHeader title="تونل تفکیکی" subtitle="تنظیمات ← تونل تفکیکی · تغییرها از اتصال بعدی اعمال می‌شوند" />
+      <PageHeader micro="Split tunnel" title="تونل تفکیکی" subtitle="تنظیمات ← تونل تفکیکی · تغییرها از اتصال بعدی اعمال می‌شوند" />
 
-      <section className="flex items-center gap-4 rounded-3xl bg-[#062845] p-[18px] text-white shadow-[0_14px_30px_rgba(2,24,56,0.35)]">
-        <span className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-[17px] bg-logo text-[#062845]">
+      <section className="glass-milk flex items-center gap-4 rounded-[26px] p-[18px]">
+        <span className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-white text-navy">
           <Icon name="split" size={26} />
         </span>
         <span className="flex flex-1 flex-col gap-1">
@@ -157,6 +157,11 @@ export function Split() {
           <Button kind="white" icon="shield" height={38} onClick={() => void set({ mode: "tun" })}>
             رفتن به حالت TUN
           </Button>
+        </div>
+      )}
+      {tun && currentOs() === "windows" && (
+        <div role="note" className="rounded-[20px] border border-warn/40 px-4 py-3 text-[13px] leading-[1.8] text-warn">
+          در TUN ویندوز همه‌ی ترافیک از VPN می‌رود: «سایت‌های ایرانی مستقیم»، تونل برنامه‌ای و قانون‌های «مستقیم» فعلاً اعمال نمی‌شوند. قانون‌های «مسدود» اعمال می‌شوند. برای مسیر هوشمند از حالت پروکسی سیستم استفاده کن.
         </div>
       )}
 
@@ -179,7 +184,7 @@ export function Split() {
             ) : (
               apps.paths.map((p) => (
                 <div key={p} className="grid grid-cols-[40px_minmax(0,1fr)_36px] items-center gap-3 border-b border-hair px-4 py-2.5 last:border-b-0">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-soft font-num text-sm font-bold text-link">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-soft font-num text-sm font-bold text-link">
                     {programName(p).slice(0, 1).toUpperCase()}
                   </span>
                   <span className="flex min-w-0 flex-col">
@@ -227,7 +232,7 @@ export function Split() {
                     key={p.path}
                     type="button"
                     onClick={() => add(p.path)}
-                    className="flex items-center gap-2.5 rounded-xl px-2 py-2 text-start hover:bg-soft"
+                    className="flex items-center gap-2.5 rounded-[18px] px-2 py-2 text-start hover:bg-soft"
                     title={p.path}
                   >
                     <span className="flex min-w-0 flex-1 flex-col">

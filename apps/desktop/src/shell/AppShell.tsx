@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from "react";
-import { Outlet, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { shortcutTarget } from "../lib/nav";
 import { currentOs } from "../lib/platform";
-import { Backdrop } from "./Backdrop";
+import { useTunnel } from "../lib/TunnelContext";
+import { Backdrop, lightFor } from "./Backdrop";
 import { Sidebar } from "./Sidebar";
 import { TitleBar } from "./TitleBar";
 import { UpdateProvider } from "./UpdateDialog";
@@ -10,6 +11,9 @@ import { UpdateProvider } from "./UpdateDialog";
 export function AppShell() {
   const os = useMemo(currentOs, []);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { state } = useTunnel();
+  const tunnel = state.status === "on" ? "on" : state.status === "connecting" ? "busy" : "off";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -26,12 +30,14 @@ export function AppShell() {
   return (
     <div dir="rtl" className="relative h-full w-full overflow-hidden bg-bg text-on-bg">
       <UpdateProvider>
-        <Backdrop />
+        <Backdrop light={lightFor(pathname, tunnel)} />
         <TitleBar os={os} />
-        <Sidebar />
-        <main className="absolute bottom-5 left-5 right-[126px] top-[38px] flex gap-5">
-          <Outlet />
-        </main>
+        <div className="absolute inset-x-6 bottom-6 top-[38px] flex gap-7 isolate">
+          <Sidebar />
+          <main className="flex min-w-0 flex-1 gap-7 overflow-hidden py-2">
+            <Outlet />
+          </main>
+        </div>
       </UpdateProvider>
     </div>
   );

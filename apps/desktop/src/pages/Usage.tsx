@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Segmented } from "../design-system/controls";
-import { Card, CardTitle, PageHeader } from "../design-system/layout";
+import { Hair, Segmented } from "../design-system/controls";
+import { CardTitle, PageHeader } from "../design-system/layout";
 import { sizeFa, usage, usageSummary, type DayUsage } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { faDigits } from "../lib/fa";
@@ -16,16 +16,17 @@ function dayLabel(day: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString("fa-IR", { month: "long", day: "numeric" });
 }
 
+/** One figure of the hairline strip (Desktop-Usage). */
 function Stat({ label, bytes, sub }: { label: string; bytes?: number; sub?: string }) {
   const s = bytes === undefined ? null : sizeFa(bytes);
   return (
-    <Card className="flex-1 basis-0">
-      <span className="text-xs text-ink-2">{label}</span>
-      <span className="text-[28px] font-extrabold leading-tight text-ink">
-        {s ? s.value : sub} {s && <span className="text-[13px] text-ink-2">{s.unit}</span>}
+    <div className="flex min-w-0 flex-1 basis-0 flex-col gap-1 py-3">
+      <span className="micro text-[9px] tracking-[0.2em]">{label}</span>
+      <span className="text-[28px] font-extrabold leading-tight">
+        {s ? s.value : sub} {s && <span className="text-[13px] font-normal text-ink-2">{s.unit}</span>}
       </span>
       {s && sub && <span className="text-[11px] text-ink-2">{sub}</span>}
-    </Card>
+    </div>
   );
 }
 
@@ -58,7 +59,7 @@ function Chart({ days }: { days: DayUsage[] }) {
         const peak = d.bytes === max && d.bytes > 0;
         return (
           <g key={d.day}>
-            <rect x={x} y={H - 24 - h} width={Math.max(bw - 6, 2)} height={h} rx={4} className={peak ? "fill-action" : "fill-link"}>
+            <rect x={x} y={H - 24 - h} width={Math.max(bw - 6, 2)} height={h} rx={4} className={peak ? "fill-white" : "fill-[#3D6BFF]"}>
               <title>{`${dayLabel(d.day)}: ${sizeFa(d.bytes).value} ${sizeFa(d.bytes).unit}`}</title>
             </rect>
             {i % every === 0 && (
@@ -106,6 +107,7 @@ export function Usage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
       <PageHeader
+        micro="Usage"
         title="مصرف داده"
         subtitle={source === "here" ? "تاریخچه‌ی این کامپیوتر روی همین‌جا ساخته می‌شود و ۴۵ روز می‌ماند" : "از سرور: همه‌ی دستگاه‌های این سرویس با هم"}
       />
@@ -118,24 +120,27 @@ export function Usage() {
               role="radio"
               aria-checked={source === o.id}
               onClick={() => setSource(o.id)}
-              className={`h-9 rounded-xl px-3.5 text-[13px] font-bold ${source === o.id ? "bg-white text-[#062845]" : "glass-clear text-white"}`}
+              className={`h-9 rounded-full px-4 text-[13px] ${source === o.id ? "bg-white font-extrabold text-navy" : "glass-milk font-bold"}`}
             >
               {o.name}
             </button>
           ))}
         </div>
       )}
-      <div className="flex gap-4">
-        <Stat label={`مجموع ${faDigits(range)} روز`} bytes={sum.total} />
-        <Stat label="میانگین روزانه" bytes={sum.average} />
-        <Stat label="پرمصرف‌ترین روز" sub={sum.peak ? dayLabel(sum.peak.day) : "—"} />
-        {remaining !== undefined ? (
-          <Stat label="باقی‌مانده‌ی سرویس" bytes={remaining} sub={`از ${faDigits(service!.quotaGib!)} گیگ`} />
-        ) : (
-          <Stat label="پرمصرف‌ترین روز (حجم)" bytes={sum.peak?.bytes ?? 0} />
+      <div className="flex gap-3.5 border-y border-hair">
+        <Stat label={`${range} days`} bytes={sum.total} />
+        <Hair vertical />
+        <Stat label="Daily avg" bytes={sum.average} />
+        <Hair vertical />
+        <Stat label="Peak day" bytes={sum.peak?.bytes ?? 0} sub={sum.peak ? dayLabel(sum.peak.day) : undefined} />
+        {remaining !== undefined && (
+          <>
+            <Hair vertical />
+            <Stat label="Service left" bytes={remaining} sub={`از ${faDigits(service!.quotaGib!)} گیگ`} />
+          </>
         )}
       </div>
-      <Card padding={18}>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
         <CardTitle
           title="مصرف روزانه"
           subtitle={source === "here" ? "ترافیک VPN همین کامپیوتر · سهم دستگاه‌های دیگر در آن نیست" : "روزها به وقت تهران"}
@@ -158,7 +163,7 @@ export function Usage() {
         ) : (
           <Chart days={days} />
         )}
-      </Card>
+      </div>
     </div>
   );
 }
