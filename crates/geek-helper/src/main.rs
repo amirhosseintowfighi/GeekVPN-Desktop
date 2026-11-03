@@ -5,7 +5,10 @@
 //! (see `geek-ipc`); it never runs code or reads files on a caller's say-so.
 //!
 //!     geekvpn-helper run          the service itself (systemd, launchd, SCM)
-//!     geekvpn-helper install      copy to a root-owned place, register, start
+//!     geekvpn-helper install [--log <file>]
+//!                                 copy to a root-owned place, register, start
+//!                                 (with --log, the outcome is also written
+//!                                 there: an elevated run has no console)
 //!     geekvpn-helper uninstall    stop, unregister, remove
 //!     geekvpn-helper version
 
@@ -20,6 +23,7 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
+    let log = args.iter().position(|a| a == "--log").and_then(|i| args.get(i + 1)).cloned();
     let result = match args.get(1).map(String::as_str) {
         Some("run") => service::run(args.iter().any(|a| a == "--console")),
         Some("install") => service::install(),
@@ -33,6 +37,13 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if let Some(log) = log {
+        let line = match &result {
+            Ok(()) => "ok\n".to_string(),
+            Err(e) => format!("{e}\n"),
+        };
+        let _ = std::fs::write(log, line);
+    }
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

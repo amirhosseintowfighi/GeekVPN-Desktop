@@ -86,130 +86,66 @@ fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
 #[cfg(windows)]
 fn elevated_install(helper: &std::path::Path) -> Result<bool, String> {
     use std::os::windows::process::CommandExt;
-    // تشخیص ادمین بودن بدون winapi اضافه: یک SCM بازِ آزمایشی.
-    // اگر ادمین نیستیم، اصلا تلاشِ مستقیم نکن — مستقیم برو سراغ UAC تا پیامِ
-    // winapiِ خام به کاربر نرسد.
+    const NO_WINDOW: u32 = 0x0800_0000;
+    // Already an administrator (the SCM opens for creating services): no
+    // UAC prompt needed.
     let already_admin = {
         use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
-        ServiceManager::local_computer(
-            None::<&str>,
-            ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE,
-        )
-        .is_ok()
+        ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE).is_ok()
     };
     if already_admin {
-        let out = std::process::Command::new(helper)
-            .arg("install")
-            .creation_flags(0x0800_0000)
-            .output()
-            .map_err(|e| e.to_string())?;
+        let out = std::process::Command::new(helper).arg("install").creation_flags(NO_WINDOW).output().map_err(|e| e.to_string())?;
         if out.status.success() {
             return Ok(true);
         }
-        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        let raw = if !stderr.is_empty() { stderr } else { stdout };
-        let detail = translate_helper_error(&raw);
-        return Err(detail);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(translate_helper_error(stderr.trim()));
     }
 
-    let log = std::env::temp_dir().join("geekvpn-helper-install.log");
+    // The helper itself is elevated (no script in between); an elevated
+    // process has no console we can read, so it writes the outcome to a log.
+    let log = std::env::temp_dir().join(format!("geekvpn-helper-install-{}.log", std::process::id()));
     let _ = std::fs::remove_file(&log);
-    // PowerShell 5.1: -Verb RunAs cannot be combined with -RedirectStandard*
-    // (→ "parameter set cannot be resolved…"). To avoid any quoting hell,
-    // write a tiny .cmd that does the redirection and elevate that instead.
-    let bat = std::env::temp_dir().join("geekvpn-helper-install.cmd");
-    let bat_content = format!("\"{}\" install > \"{}\" 2>&1\r\n", helper.display(), log.display());
-    let _ = std::fs::write(&bat, bat_content);
-    let log_str = log.to_string_lossy().replace('\'', "''");
-    let bat_str = bat.to_string_lossy().replace('\'', "''");
-    // Only call Write-Host EXIT:$c when we actually have a process handle;
-    // PowerShell's catch path may not have $c.
+    let quote = |p: &std::path::Path| p.to_string_lossy().replace('\'', "''");
+    // Start-Process joins ArgumentList with spaces, so the log path carries
+    // its own double quotes.
     let command = format!(
-        "$log='{log_str}'; $bat='{bat_str}'; try {{ $p = Start-Process -FilePath 'cmd.exe' -ArgumentList \"/c `\"$bat`\"\" -Verb RunAs -Wait -PassThru -WindowStyle Hidden; if ($p) {{ $c=$p.ExitCode; if (Test-Path $log) {{ Get-Content $log | Write-Host }}; Write-Host \"EXIT:$c\"; exit $c }} else {{ Write-Host \"NO_HANDLE\"; exit 1 }} }} catch {{ $m=$_.Exception.Message; $m | Out-File -Append $log; Write-Host $m; Write-Host \"CATCH\"; exit 1 }}; if (Test-Path $log) {{ Get-Content $log | Write-Host }}"
+        "try {{ $p = Start-Process -FilePath '{exe}' -ArgumentList @('install','--log','\"{log}\"') -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode }} catch {{ Write-Output $_.Exception.Message; exit 1223 }}",
+        exe = quote(helper),
+        log = quote(&log),
     );
     let out = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &command])
-        .creation_flags(0x0800_0000)
+        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+        .creation_flags(NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
+    let written = std::fs::read_to_string(&log).unwrap_or_default();
+    let _ = std::fs::remove_file(&log);
     if out.status.success() {
         return Ok(true);
     }
-    let mut detail = String::new();
-    if let Ok(t) = std::fs::read_to_string(&log) {
-        if !t.trim().is_empty() {
-            detail = t.trim().to_string();
-        }
+    if out.status.code() == Some(1223) && written.trim().is_empty() {
+        return Err("نصب انجام نشد: پنجره‌ی اجازه‌ی ویندوز رد یا بسته شد. دوباره «نصب سرویس» را بزن و در آن پنجره Yes را انتخاب کن.".into());
     }
-    if detail.is_empty() {
-        detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    }
-    if detail.is_empty() {
-        detail = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    }
-    if detail.to_lowercase().contains("operation was canceled") || detail.contains("1223") || detail.to_lowercase().contains("canceled") {
-        return Err(
-            "نصب ادامه پیدا نکرد — به نظر پنجره‌ی تاییدِ ویندوز بسته یا رد شد.\n\
-             ویندوز هنگام «نصب دوباره» یک پنجره‌ی آبی/زرد می‌آورد با عنوان «آیا می‌خواهید به این برنامه اجازه دهید…» — \
-             باید Yes را بزنی. دوباره «نصب دوباره» را بزن و وقتی آن پنجره آمد Yes را بزن."
-                .into(),
-        );
-    }
-    if detail.is_empty() || detail.starts_with("EXIT:") {
-        // ریشه‌ی باگِ بیلدِ قبلی: log خالی می‌ماند و فقط EXIT برمی‌گشت.
-        // علت واقعی معمولاً در bat/log است، نه در stderrِ powershell.
-        let bat_hint = if bat.exists() { format!(" (bat: {})", bat.display()) } else { "".to_string() };
-        return Err(format!(
-            "نصبِ سرویس بدونِ پیامِ خطایِ واضح تمام شد.\n\
-             برای اینکه دقیق بفهمم مشکل کجاست، لطفاً این‌ها را برایم بفرست:\n\
-             1) محتوای فایل: {}{bat_hint}\n\
-             2) همین متنِ خطا را کامل کپی کن (کد: {})\n\
-             3) نسخه‌ی برنامه (تنظیمات → درباره، یا نامِ فایلِ نصاب)\n\
-             \n\
-             توضیحِ UAC برای کاربرِ عادی: ویندوز برای نصبِ سرویس یک پنجره‌ی جداگانه می‌آورد \
-             («آیا اجازه می‌دهید این برنامه تغییراتی در دستگاه ایجاد کند؟») — باید Yes بزنی. \
-             اگر آن پنجره را اصلاً ندیدی، یک‌بار برنامه را ببند و دوباره باز کن، بعد «نصب دوباره» را بزن.\n\
-             اگر Windows Defender چیزی را قرنطینه کرده باشد، معمولاً داخلِ log بالا نوشته می‌شود.",
-            log.display(),
-            if detail.is_empty() { "(خالی)" } else { &detail }
-        ));
-    }
-    Err(translate_helper_error(&detail))
+    Err(translate_helper_error(written.trim()))
 }
 
+/// The helper's English error as a sentence the customer can act on; the
+/// original stays in brackets for problem reports.
 #[cfg(windows)]
 fn translate_helper_error(raw: &str) -> String {
-    let t = raw.trim();
+    let t = raw.trim().trim_start_matches("geekvpn-helper:").trim();
     if t.is_empty() {
-        return "نصب سرویس بدون پیام خطا تمام شد.".into();
+        return "نصب سرویس انجام نشد. برنامه را ببند، دوباره باز کن و «نصب سرویس» را بزن.".into();
     }
-    // PowerShell 5.1: ترکیب -Verb RunAs با -RedirectStandard* خطای parameter set می‌دهد.
-    // اگر هنوز این خطا دیده شد (بیلد قدیمی نصب است)، مستقیم بگو بیلد را عوض کند.
-    if t.contains("parameter set cannot be resolved") || t.contains("A positional parameter cannot be found") {
-        return format!(
-            "نصبِ UAC به‌خاطر باگِ بیلدِ قبلی انجام نشد (parameter set). \
-              آخرین geekvpn-windows را از Actions همین برنچ (35bb240 به بعد) دوباره دانلود و نصب کن، \
-              بعد «نصب دوباره» را بزن. (جزئیات: {t})"
-        );
+    if t.contains("wintun.dll") || t.contains("msys-2.0.dll") || t.contains("hev-socks5-tunnel") {
+        return format!("فایل‌های حالت TUN کنار برنامه کامل نیستند. نسخه‌ی تازه‌ی GeekVPN را دوباره نصب کن. ({t})");
     }
-    // پیام‌های فنیِ ویندوز/helper را به فارسیِ قابلِ اقدام ترجمه کن.
-    if t.contains("wintun.dll is missing") || t.contains("msys-2.0.dll is missing") {
-        // ریشه‌ی مشکلِ دسته‌ی دومِ کاربر — DLLها کنارِ helper نیستند چون بیلدِ قدیمی نصب است.
-        let dll = if t.contains("wintun.dll") { "wintun.dll" } else { "msys-2.0.dll" };
-        return format!(
-            "فایل {dll} کنارِ سرویس پیدا نشد. این بیلدی که نصب کرده‌ای قدیمی‌ست — \
-             آخرین geekvpn-windows را از همین برنچ (f3eb9ff به بعد) دانلود و نصب کن، \
-             بعد دوباره «نصب دوباره» را بزن. (جزئیات: {t})"
-        );
+    let lower = t.to_lowercase();
+    if lower.contains("service manager") || lower.contains("access is denied") {
+        return format!("نصب سرویس دسترسی مدیر سیستم می‌خواهد. «نصب سرویس» را بزن و در پنجره‌ی ویندوز Yes را انتخاب کن. ({t})");
     }
-    if t.to_lowercase().contains("service manager") {
-        return format!(
-            "برای نصبِ سرویس دسترسیِ مدیر لازم است. برنامه را معمولی باز کن و «نصب دوباره» را بزن و در پنجره‌ی ویندوز Yes را بزن \
-             — یا یک PowerShell را Run as administrator کن و بزن: geekvpn-helper install  (جزئیات: {t})"
-        );
-    }
-    t.to_string()
+    format!("نصب سرویس انجام نشد. ({t})")
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]

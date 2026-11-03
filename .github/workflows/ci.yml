@@ -52,6 +52,7 @@ jobs:
       GEEK_BOT_USERNAME: ${{ vars.GEEK_BOT_USERNAME }}
       GEEK_UPDATER_PUBKEY: ${{ vars.GEEK_UPDATER_PUBKEY }}
       GEEK_RELEASE_REPO: ${{ github.repository }}
+      GEEK_BOOTSTRAP_PROXY: ${{ secrets.GEEK_BOOTSTRAP_PROXY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v7

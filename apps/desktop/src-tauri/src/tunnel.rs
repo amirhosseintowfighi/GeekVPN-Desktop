@@ -241,7 +241,7 @@ impl Tunnel {
             let ports = local_ports();
             let config = match opts.mode {
                 Mode::Proxy => client_config(server, over.as_deref(), opts.route, &opts.rules, ports),
-                Mode::Tun => tun_upstream_config(server, over.as_deref(), &upstream),
+                Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, &opts.rules),
             };
             match self.try_one(&core, server, &config).await {
                 Ok(delay) => {
@@ -585,8 +585,21 @@ impl Tunnel {
         let core = self.core().await?;
         let config = match live.mode {
             Mode::Proxy => client_config(server, over, live.route, &live.rules, live.ports),
-            Mode::Tun => tun_upstream_config(server, over, &live.upstream),
+            Mode::Tun => tun_core_config(server, over, &live.upstream, &live.rules),
         };
+        if live.mode == Mode::Tun {
+            // The TUN's routes catch everything but the first server's
+            // addresses: the new one's must go around it too, or the core's
+            // own connection loops back into the tunnel (Windows).
+            let ips = Self::tun_bypass(server, over).await;
+            if !ips.is_empty() {
+                if let Ok((h, _)) = self.helper().await {
+                    if let Err(e) = h.call::<serde_json::Value>(Request::TunBypass { ips }, Duration::from_secs(10)).await {
+                        eprintln!("geekvpn: failover bypass not added: {e}");
+                    }
+                }
+            }
+        }
         match self.try_one(&core, server, &config).await {
             Ok(delay) => {
                 *self.live.lock().await = Some(Live { config, ..live });
@@ -693,6 +706,17 @@ fn free_port() -> u16 {
 }
 
 /// A random credential for the core's locked SOCKS inbound.
+/// The core behind the TUN. Where sing-box owns the TUN it does the routing;
+/// on Windows (hev) only the core can, and only block rules apply there.
+fn tun_core_config(server: &Server, over: Option<&str>, upstream: &Upstream, rules: &[CustomRule]) -> serde_json::Value {
+    let config = tun_upstream_config(server, over, upstream);
+    if cfg!(windows) {
+        geek_config::with_block_rules(config, rules)
+    } else {
+        config
+    }
+}
+
 fn token() -> String {
     uuid::Uuid::new_v4().simple().to_string()
 }

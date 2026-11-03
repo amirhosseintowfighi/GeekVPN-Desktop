@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": [
+      "binaries/geekcore",
+      "binaries/geekvpn-helper",
+      "binaries/hev-socks5-tunnel"
+    ],
+    "resources": [
+      "resources/geo/geoip.dat",
+      "resources/geo/geosite.dat",
+      "resources/geo/geoip-only-cn-private.dat",
+      "resources/cfscan/ipv4.txt",
+      "resources/cfscan/LICENSE.txt",
+      "binaries/wintun.dll",
+      "binaries/msys-2.0.dll"
+    ]
+  }
+}

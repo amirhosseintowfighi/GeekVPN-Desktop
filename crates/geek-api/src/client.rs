@@ -203,10 +203,14 @@ impl ApiClient {
     /// Only https:// is allowed and the body is capped at 2 MiB.
     pub async fn fetch_subscription(&self, url: &str) -> Result<String, ApiError> {
         let parsed = Url::parse(url).map_err(|e| ApiError::Decode(format!("bad url: {e}")))?;
-        if parsed.scheme() != "https" {
-            return Err(ApiError::Decode("subscription url must be https://".into()));
+        // Plain http is allowed: many panels hand out http subscription links
+        // and the Android app takes them. The content is configs, not secrets
+        // of ours, and it is parsed, never run.
+        if !matches!(parsed.scheme(), "https" | "http") {
+            return Err(ApiError::Decode("subscription url must be http(s)://".into()));
         }
-        let resp = self.http.get(url).timeout(REQUEST_TIMEOUT).send().await?;
+        const MAX: usize = 2 * 1024 * 1024;
+        let mut resp = self.http.get(url).timeout(REQUEST_TIMEOUT).send().await?;
         if !resp.status().is_success() {
             return Err(ApiError::Http {
                 status: resp.status().as_u16(),
@@ -214,20 +218,18 @@ impl ApiClient {
                 message_fa: None,
             });
         }
-        // Reject obviously too-large bodies early via Content-Length.
-        if let Some(len) = resp.content_length() {
-            if len > 2 * 1024 * 1024 {
-                return Err(ApiError::Decode("subscription too large".into()));
-            }
-        }
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| ApiError::Decode(e.to_string()))?;
-        if bytes.len() > 2 * 1024 * 1024 {
+        if resp.content_length().is_some_and(|len| len > MAX as u64) {
             return Err(ApiError::Decode("subscription too large".into()));
         }
-        String::from_utf8(bytes.to_vec()).map_err(|e| ApiError::Decode(e.to_string()))
+        // Read in chunks so a server that sends no length can't fill memory.
+        let mut bytes: Vec<u8> = Vec::new();
+        while let Some(chunk) = resp.chunk().await.map_err(|e| ApiError::Decode(e.to_string()))? {
+            if bytes.len() + chunk.len() > MAX {
+                return Err(ApiError::Decode("subscription too large".into()));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        String::from_utf8(bytes).map_err(|e| ApiError::Decode(e.to_string()))
     }
 
     /// Any Mini App route (`/api/miniapp/...`) over the app's Bearer token.

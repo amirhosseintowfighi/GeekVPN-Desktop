@@ -18,10 +18,35 @@ pub struct Running {
     pub info: TunInfo,
     pub pid: Option<u32>,
     pub generation: u64,
+    /// Server addresses routed around the TUN (Windows); removed when the
+    /// engine stops or exits.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    bypass: Arc<Mutex<Vec<String>>>,
     stop: Option<oneshot::Sender<oneshot::Sender<()>>>,
 }
 
 impl Running {
+    /// Failover moved the core to another server: route its addresses
+    /// around the TUN as `start` did for the first one. Nothing to do where
+    /// sing-box owns the TUN (it sends the core's own traffic direct).
+    pub fn add_bypass(&self, ips: &[String]) {
+        #[cfg(windows)]
+        {
+            let mut known = self.bypass.lock().unwrap_or_else(|e| e.into_inner());
+            for ip in ips.iter().take(16) {
+                if known.contains(ip) {
+                    continue;
+                }
+                match win::add_bypass(ip) {
+                    Ok(()) => known.push(ip.clone()),
+                    Err(e) => eprintln!("geekvpn-helper: add_bypass {ip} warning: {e}"),
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = ips;
+    }
+
     pub async fn stop(mut self) {
         if let Some(tx) = self.stop.take() {
             let (done, wait) = oneshot::channel();
@@ -30,6 +55,13 @@ impl Running {
             }
         }
     }
+}
+
+/// The local SOCKS credentials the app sends for the TUN upstream. They go
+/// into the engine's config file verbatim, so only plain tokens are taken:
+/// anything that could break out of a YAML/JSON string is refused.
+pub fn safe_credential(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 // ── Unix / macOS: sing-box ──────────────────────────────────────────────
@@ -106,6 +138,7 @@ mod unix {
             info: TunInfo { interface, clash_port, clash_secret: host.clash_secret },
             pid,
             generation,
+            bypass: Arc::default(),
             stop: Some(stop_tx),
         })
     }
@@ -294,6 +327,9 @@ mod win {
         }
         std::fs::create_dir_all(state_dir).map_err(|e| HelperError::new(ErrorCode::Internal, format!("{}: {e}", state_dir.display())))?;
 
+        if !safe_credential(&spec.upstream.username) || !safe_credential(&spec.upstream.password) {
+            return Err(HelperError::new(ErrorCode::BadRequest, "upstream credentials must be plain tokens"));
+        }
         let yml_path = state_dir.join("hev.yml");
         let yml = hev_yaml(spec);
         std::fs::write(&yml_path, yml.as_bytes())
@@ -318,9 +354,11 @@ mod win {
         // hev's own TCP to the server loops back through the TUN. WFP's App
         // filter for geekcore covers most cases, but a concrete /32 route via
         // the real gateway is robust across firewalls/AV interop.
+        let bypass: Arc<Mutex<Vec<String>>> = Arc::default();
         for ip in &spec.bypass {
-            if let Err(e) = add_bypass(ip) {
-                eprintln!("geekvpn-helper: add_bypass {ip} warning: {e}");
+            match add_bypass(ip) {
+                Ok(()) => bypass.lock().unwrap_or_else(|e| e.into_inner()).push(ip.clone()),
+                Err(e) => eprintln!("geekvpn-helper: add_bypass {ip} warning: {e}"),
             }
         }
         // Publish routes that send every other packet through GeekVPN.
@@ -331,13 +369,18 @@ mod win {
 
         let pid = child.id();
         let yml_path2 = yml_path.clone();
-        let bypass_for_stop = spec.bypass.clone();
-        let bypass_for_exit = spec.bypass.clone();
+        let routed = bypass.clone();
+        let drop_bypass = move || {
+            let ips = std::mem::take(&mut *routed.lock().unwrap_or_else(|e| e.into_inner()));
+            for ip in &ips {
+                remove_bypass(ip);
+            }
+        };
         let (stop_tx, stop_rx) = oneshot::channel::<oneshot::Sender<()>>();
         tokio::spawn(async move {
             tokio::select! {
                 done = stop_rx => {
-                    for ip in &bypass_for_stop { remove_bypass(ip); }
+                    drop_bypass();
                     let _ = remove_routes();
                     let _ = child.kill().await;
                     // Give hev a moment to close the adapter handle.
@@ -348,7 +391,7 @@ mod win {
                     }
                 }
                 status = child.wait() => {
-                    for ip in &bypass_for_exit { remove_bypass(ip); }
+                    drop_bypass();
                     let _ = remove_routes();
                     let why = format!("hev-socks5-tunnel exited ({}): {}", status.map(|s| s.to_string()).unwrap_or_default(), last_lines(&tail));
                     let _ = exited.send((generation, why));
@@ -360,20 +403,21 @@ mod win {
             info: TunInfo { interface: TUN_NAME.to_string(), clash_port: 0, clash_secret: String::new() },
             pid,
             generation,
+            bypass,
             stop: Some(stop_tx),
         })
     }
 
     fn hev_yaml(spec: &TunSpec) -> String {
-        // Single quotes escaped by doubling? YAML single-quoted style: ''.
-        let esc = |s: &str| s.replace('\'', "''");
+        // `start` has already refused anything but plain tokens, so nothing
+        // here can end the quoted scalar.
         format!(
-            "tunnel:\n  name: {name}\n  mtu: 1500\n  ipv4: 198.18.0.1\n  guid: {guid}\n  multi-queue: false\nsocks5:\n  address: 127.0.0.1\n  port: {port}\n  username: '{user}'\n  password: '{pass}'\n  udp: 'tcp'\nmisc:\n  log-level: warn\n",
+            "tunnel:\n  name: {name}\n  mtu: 1500\n  ipv4: 198.18.0.1\n  guid: {guid}\n  multi-queue: false\nsocks5:\n  address: 127.0.0.1\n  port: {port}\n  username: '{user}'\n  password: '{pass}'\n  udp: 'udp'\nmisc:\n  log-level: warn\n",
             name = TUN_NAME,
             guid = HEV_GUID,
             port = spec.upstream.port,
-            user = esc(&spec.upstream.username),
-            pass = esc(&spec.upstream.password),
+            user = spec.upstream.username,
+            pass = spec.upstream.password,
         )
     }
 
@@ -439,7 +483,7 @@ mod win {
         if iface.is_empty() { None } else { Some((iface.to_string(), gw.to_string())) }
     }
 
-    fn add_bypass(ip: &str) -> Result<(), String> {
+    pub(super) fn add_bypass(ip: &str) -> Result<(), String> {
         let ip = ip.trim();
         if ip.is_empty() { return Ok(()); }
         let addr: std::net::IpAddr = ip.parse().map_err(|_| format!("bad ip {ip}"))?;
@@ -568,3 +612,14 @@ mod win {
 
 #[cfg(windows)]
 pub use win::{kill_stale, start, version};
+
+#[cfg(test)]
+mod credential_tests {
+    #[test]
+    fn only_plain_tokens_reach_the_engine_config() {
+        assert!(super::safe_credential("3f2a9c0d4e5b6a7f8091a2b3c4d5e6f7"));
+        for bad in ["", "a'b", "a\nudp: tcp", "x y", "a\"b", &"a".repeat(65)] {
+            assert!(!super::safe_credential(bad), "{bad:?}");
+        }
+    }
+}

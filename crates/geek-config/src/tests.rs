@@ -223,3 +223,22 @@ fn tun_upstream_is_locked_and_sends_everything_to_the_server() {
     assert_eq!(c["inbounds"][0]["settings"]["accounts"][0]["pass"], "p");
     assert_eq!(c["routing"]["rules"][0]["outboundTag"], "proxy");
 }
+
+#[test]
+fn windows_tun_keeps_block_rules() {
+    use crate::{CustomRule, RuleAction};
+    let s = Server::parse(VLESS_WS_TLS).unwrap();
+    let up = Upstream { port: 1, username: "u".into(), password: "p".into() };
+    let rules = vec![
+        CustomRule { value: "ads.example".into(), action: RuleAction::Block },
+        CustomRule { value: "bank.ir".into(), action: RuleAction::Direct },
+    ];
+    let c = with_block_rules(tun_upstream_config(&s, None, &up), &rules);
+    let r = c["routing"]["rules"].as_array().unwrap();
+    assert_eq!(r.len(), 2, "the block rule and the catch-all; direct can't apply");
+    assert_eq!(r[0]["outboundTag"], "block");
+    assert_eq!(r[1]["outboundTag"], "proxy");
+    assert!(c["outbounds"].as_array().unwrap().iter().any(|o| o["tag"] == "block"));
+    let plain = with_block_rules(tun_upstream_config(&s, None, &up), &rules[1..]);
+    assert_eq!(plain, tun_upstream_config(&s, None, &up));
+}
