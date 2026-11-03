@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
-import { PingBars, Segmented, Switch } from "./controls";
+import { RuleRow, Segmented, Switch } from "./controls";
 
 describe("Switch", () => {
   it("reports its state to assistive tech and flips on click", () => {
@@ -30,10 +30,13 @@ describe("Segmented", () => {
   });
 });
 
-describe("PingBars", () => {
-  it("shows a dash for no answer instead of 0ms", () => {
-    const { container } = render(<PingBars ms={0} />);
-    expect(container.textContent).toContain("—");
-    expect(container.textContent).not.toContain("0ms");
+describe("RuleRow", () => {
+  it("is a pressable button when it can be picked, and says when it is", () => {
+    const picked: string[] = [];
+    render(<RuleRow code="DE" title="آلمان" end="121 ms" selected onClick={() => picked.push("de")} />);
+    const row = screen.getByRole("button", { name: /آلمان/ });
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(row);
+    expect(picked).toEqual(["de"]);
   });
 });

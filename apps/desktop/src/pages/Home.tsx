@@ -1,31 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Icon, type IconName } from "../design-system/Icon";
+import { Icon } from "../design-system/Icon";
 import { Logo } from "../design-system/Logo";
-import { Button, CountryBadge, PingBars } from "../design-system/controls";
+import { Button, Hair, RuleRow } from "../design-system/controls";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
 import { countryCode, daysLeft, elapsed, plainName, speed } from "../lib/format";
-import { HISTORY, useTunnel } from "../lib/TunnelContext";
+import { useTunnel } from "../lib/TunnelContext";
 import { ServerPanel } from "./ServerList";
-
-function Stat({ icon, label, value, unit }: { icon: IconName; label: string; value: string; unit?: string }) {
-  return (
-    <div className="flex flex-1 basis-0 flex-col gap-1 px-3.5">
-      <span className="flex items-center gap-1.5 text-xs opacity-85">
-        <Icon name={icon} size={14} stroke={2.2} />
-        {label}
-      </span>
-      {unit ? (
-        <span dir="ltr" className="text-right font-num text-lg font-bold">
-          {value} <span className="text-[11px] opacity-80">{unit}</span>
-        </span>
-      ) : (
-        <span className="text-[17px] font-extrabold">{value}</span>
-      )}
-    </div>
-  );
-}
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(Date.now);
@@ -37,47 +19,78 @@ function useNow(active: boolean): number {
   return now;
 }
 
-/** The last minute of download (white) and upload (light blue), as in Desktop-Home. */
-function SpeedGraph() {
-  const { history } = useTunnel();
-  const max = Math.max(1, ...history.map((h) => Math.max(h.downBps, h.upBps)));
-  const pts = (pick: (h: (typeof history)[number]) => number) =>
-    history.map((h, i) => `${(i + HISTORY - history.length) * (600 / (HISTORY - 1))},${54 - (pick(h) / max) * 50}`).join(" ");
+/** «شب بخیر» and the Latin micro-label that goes with it. */
+function greeting(hour: number): { fa: string; en: string } {
+  if (hour >= 5 && hour < 12) return { fa: "صبح بخیر", en: "Good morning" };
+  if (hour >= 12 && hour < 17) return { fa: "روز بخیر", en: "Good afternoon" };
+  if (hour >= 17 && hour < 21) return { fa: "عصر بخیر", en: "Good evening" };
+  return { fa: "شب بخیر", en: "Good evening" };
+}
+
+/** One figure of the Down / Up / Ping strip. */
+function Figure({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="flex flex-col gap-1.5 px-1">
-      <div className="flex justify-between text-xs">
-        <span className="font-bold">سرعت زنده · ۶۰ ثانیه‌ی اخیر</span>
-        <span className="flex gap-3 opacity-90">
-          <span className="flex items-center gap-1.5">
-            <span className="h-[3px] w-2.5 rounded-sm bg-white" />
-            دانلود
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-[3px] w-2.5 rounded-sm bg-[#7DD8FF]" />
-            آپلود
-          </span>
-        </span>
-      </div>
-      <svg role="img" aria-label="نمودار سرعت زنده" viewBox="0 0 600 56" preserveAspectRatio="none" className="block h-14 w-full">
-        {history.length > 1 && (
-          <>
-            <polyline points={pts((h) => h.downBps)} fill="none" stroke="#FFFFFF" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-            <polyline points={pts((h) => h.upBps)} fill="none" stroke="#7DD8FF" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-          </>
-        )}
-      </svg>
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-2.5">
+      <span className="micro text-[9px] tracking-[0.2em]">{label}</span>
+      <span dir="ltr" className="whitespace-nowrap text-right font-num text-xl font-medium">
+        {value}
+        {unit && <span className="ms-[3px] text-[11px] text-ink-2">{unit}</span>}
+      </span>
     </div>
   );
 }
 
-/** Desktop-Home and Desktop-Home-Connecting, driven by the real tunnel state. */
+/** The light column under the connect ring when connected (Desktop-Home). */
+function LightColumn() {
+  const steps = [0.56, 0.494, 0.433, 0.377, 0.326, 0.279, 0.238, 0.201, 0.169, 0.141, 0.118, 0.099, 0.084, 0.073, 0.065, 0.061, 0.06];
+  return (
+    <>
+      {steps.map((o, i) => (
+        <span
+          key={o}
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-[52px] -z-10 h-[333px] w-[333px] rounded-full bg-light"
+          style={{ top: -52 + i * 36.6, opacity: o }}
+        />
+      ))}
+    </>
+  );
+}
+
+type Step = { title: string; hint?: string; state: "done" | "now" | "next" };
+
+function StepRow({ step }: { step: Step }) {
+  return (
+    <div className={`flex items-center gap-3 border-b border-hair py-[9px] ${step.state === "next" ? "opacity-50" : ""}`}>
+      {step.state === "done" ? (
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-navy">
+          <Icon name="check" size={14} stroke={3} />
+        </span>
+      ) : step.state === "now" ? (
+        <span className="box-border flex h-6 w-6 items-center justify-center rounded-full border-2 border-blue-text">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-blue-text" />
+        </span>
+      ) : (
+        <span className="box-border h-6 w-6 rounded-full border-[1.5px] border-white/35" />
+      )}
+      <span className="flex flex-col gap-0.5">
+        <span className={`text-sm ${step.state === "now" ? "font-extrabold" : "font-bold"}`}>{step.title}</span>
+        {step.hint && <span className="text-xs text-ink-2">{step.hint}</span>}
+      </span>
+    </div>
+  );
+}
+
+/** Desktop-Home, Desktop-Home (قطع) and Desktop-Home-Connecting, driven by the real tunnel state. */
 export function Home() {
   const { view: auth, showSignIn } = useAuth();
   const { view, state, stats, busy, toggle, disconnect } = useTunnel();
   const on = state.status === "on";
   const connecting = state.status === "connecting";
+  const failed = state.status === "failed";
   const now = useNow(on);
   const user = auth?.user ?? null;
+  const hello = greeting(new Date(now).getHours());
 
   const serverId = state.status === "on" || state.status === "connecting" ? state.serverId : view?.selected;
   const server = view?.servers.find((s) => s.id === serverId) ?? null;
@@ -87,170 +100,194 @@ export function Home() {
   const down = speed(stats?.downBps ?? 0);
   const up = speed(stats?.upBps ?? 0);
   const noServers = !view?.servers.length;
+  const routeFa = view?.route === "smart" ? "مسیر هوشمند" : view?.route === "global" ? "مسیر سراسری" : "مسیر مستقیم";
+  const tunKs = view?.mode === "tun" && view.killSwitch;
 
-  let title: string;
-  let subtitle: string;
+  let title: ReactNode;
+  let side: ReactNode;
   if (on) {
-    title = elapsed(state.sinceMs, now);
-    subtitle = "برای قطع اتصال، روی عینک بزن";
-  } else if (connecting && state.stage === "findingIp") {
-    title = "پیدا کردن IP تمیز…";
-    subtitle = "این شبکه هنوز IP تمیز ندارد؛ یک اسکن کوتاه (تا ۱۵ ثانیه)";
-  } else if (connecting && state.stage === "testing") {
-    title = "تست سرورها…";
-    subtitle = "سریع‌ترین سرور و IP برای این شبکه";
+    title = (
+      <>
+        متصل و <span className="text-blue-text">امن</span>
+      </>
+    );
+    side = (
+      <span dir="ltr" className="font-num text-[44px] font-medium leading-none">
+        {elapsed(state.sinceMs, now)}
+      </span>
+    );
   } else if (connecting) {
-    title = state.of > 1 ? `تلاش ${faDigits(state.attempt)} از ${faDigits(state.of)}` : "در حال اتصال…";
-    subtitle = "برای لغو، دوباره روی عینک بزن";
-  } else if (noServers) {
-    title = "هنوز سروری نداری";
-    subtitle = "اول یک سرویس بخر یا لینک اشتراکت را در «سرویس‌ها» اضافه کن.";
+    title = (
+      <>
+        اتصال <span className="text-blue-text">هوشمند</span>
+      </>
+    );
+    side = null;
+  } else if (failed) {
+    title = "وصل نشد";
+    side = <span className="micro text-xs">Status · Failed</span>;
   } else {
-    title = view?.autoSelect ? "سرور: خودکار" : plainName(server?.name ?? "") || "آماده‌ی اتصال";
-    subtitle = "برای اتصال، روی عینک بزن";
+    title = noServers ? "هنوز سروری نداری" : "قطع است";
+    side = <span className="micro text-xs">Status · Off</span>;
   }
+
+  // Smart connect's stages as the design's checklist.
+  let steps: Step[] = [];
+  if (connecting) {
+    const at = state.stage === "findingIp" ? 0 : state.stage === "testing" ? 1 : 2;
+    const mark = (i: number): Step["state"] => (i < at ? "done" : i === at ? "now" : "next");
+    steps = [
+      { title: "پیدا کردن IP تمیز", hint: state.stage === "findingIp" ? "اسکن کوتاه برای این شبکه (تا ۱۵ ثانیه)" : undefined, state: mark(0) },
+      { title: "تست تأخیر سرورها", hint: state.stage === "testing" ? "سریع‌ترین سرور و IP برای این شبکه" : undefined, state: mark(1) },
+      ...(tunKs ? [{ title: "تنظیم فایروال و Kill Switch", state: mark(2) } as Step] : []),
+      {
+        title: state.of > 1 ? `اتصال · تلاش ${faDigits(state.attempt)} از ${faDigits(state.of)}` : "اتصال",
+        hint: state.stage === "connecting" && server ? plainName(server.name) || server.address : undefined,
+        state: mark(2),
+      },
+    ];
+    const current = steps.findIndex((s) => s.state === "now");
+    side = (
+      <span className="micro text-xs">
+        Step {current + 1} / {steps.length}
+      </span>
+    );
+  }
+
+  const pct = quota && quota.quotaGib ? Math.min(100, Math.round((quota.usedGib / quota.quotaGib) * 100)) : null;
 
   return (
     <>
-      <div className="flex min-w-0 flex-1 basis-0 flex-col gap-4 max-[1200px]:gap-3">
-        <header className="flex items-center gap-3">
-          <div className="flex flex-1 flex-col gap-0.5">
-            <span dir="ltr" className="text-right font-num text-[22px] font-bold tracking-[-0.5px]">
-              GeekVPN
+      <div className="flex min-w-0 flex-1 flex-col gap-[18px]">
+        <div className="flex items-center justify-between gap-3">
+          <span className="micro">{hello.en} · Home</span>
+          <span className="flex items-center gap-2">
+            {!user && (
+              <Button kind="soft" icon="plane" height={40} onClick={showSignIn}>
+                ورود با تلگرام
+              </Button>
+            )}
+            <Link to="/shop" className="flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-white px-[18px] text-[13px] font-extrabold text-navy no-underline">
+              خرید سرویس
+            </Link>
+          </span>
+        </div>
+        <Hair />
+        <div className="flex items-end justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-[15px] text-ink-2">
+              {hello.fa}، {user ? user.displayName || `کاربر ${faDigits(user.telegramId)}` : "مهمان"}
             </span>
-            <span className="text-[13px] opacity-90">{user ? `سلام، ${user.displayName}` : "خوش اومدی"}</span>
+            <h1 className="m-0 text-[56px] font-extrabold leading-[1.2] max-[1200px]:text-[44px]">{title}</h1>
           </div>
-          {!user && (
-            <button type="button" onClick={showSignIn} className="glass-clear flex h-10 items-center gap-2 rounded-[13px] px-3.5 text-[13px] font-bold">
-              <Icon name="plane" size={16} />
-              ورود با تلگرام
-            </button>
-          )}
-          <Link to="/shop" className="flex h-10 items-center gap-2.5 rounded-[13px] bg-pay-bar pe-1.5 ps-3.5 text-[13px] font-bold text-white no-underline">
-            خرید سرویس
-            <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-white text-[#062845]">
-              <Icon name="plus" size={16} stroke={2.6} />
-            </span>
-          </Link>
-        </header>
+          <div className="shrink-0 pb-2">{side}</div>
+        </div>
 
-        <div className="flex flex-1 items-center gap-9 px-3 max-[1200px]:flex-col max-[1200px]:items-stretch max-[1200px]:gap-6">
-          <div className="relative flex h-[280px] w-[280px] shrink-0 items-center justify-center">
-            <svg aria-hidden="true" width="280" height="280" viewBox="0 0 280 280" className="absolute inset-0">
-              <circle cx="140" cy="140" r="128" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="6" />
-              {(on || connecting) && (
-                <circle
-                  cx="140"
-                  cy="140"
-                  r="128"
-                  fill="none"
-                  stroke="#00ACFE"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  strokeDasharray={on ? "805 805" : "300 805"}
-                  transform="rotate(90 140 140)"
-                  className={connecting ? "origin-center animate-spin [animation-duration:2.4s]" : ""}
-                />
-              )}
-            </svg>
+        <div className="flex min-h-0 flex-1 items-center gap-9 max-[1100px]:flex-col max-[1100px]:items-stretch">
+          <div className="relative h-[230px] w-[230px] shrink-0 self-center isolate">
+            {on && <LightColumn />}
             <button
               type="button"
               aria-label={on ? "قطع اتصال" : connecting ? "لغو اتصال" : "اتصال"}
               disabled={busy && !connecting}
               onClick={toggle}
-              className={`relative flex h-[236px] w-[236px] items-center justify-center rounded-full transition-transform active:scale-[0.98] ${
-                on ? "glass-milk shadow-[0_0_0_14px_rgba(255,255,255,0.12),0_24px_50px_rgba(2,36,84,0.35)]" : "glass-clear shadow-[0_0_0_14px_rgba(255,255,255,0.08),0_24px_50px_rgba(2,36,84,0.3)]"
-              }`}
+              className="glass-milk relative flex h-[230px] w-[230px] items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_30px_70px_rgba(0,4,30,0.45)] transition-transform active:scale-[0.98]"
             >
-              <span className={connecting ? "opacity-70" : ""}>
-                <Logo size={132} color={on ? "#00ACFE" : "#FFFFFF"} />
+              <span
+                className={`flex h-[138px] w-[138px] items-center justify-center rounded-full ${
+                  on ? "bg-white" : "border border-white/30 bg-white/10"
+                } ${connecting ? "animate-pulse" : ""}`}
+              >
+                <Logo size={on ? 93 : 89} color={on ? "#07123A" : "rgba(255,255,255,0.7)"} />
               </span>
             </button>
           </div>
+
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-            <span className="flex items-center gap-2 text-[15px] font-bold">
-              <span
-                className={`h-[9px] w-[9px] rounded-[2px] ${on ? "bg-ok-bright" : connecting ? "bg-[#FFB547]" : state.status === "failed" ? "bg-bad" : "bg-white/60"}`}
-              />
-              {on ? "متصل و امن" : connecting ? "در حال اتصال" : state.status === "failed" ? "وصل نشد" : "قطع"}
-            </span>
-            <span dir={on ? "ltr" : undefined} className={`leading-none ${on ? "text-right font-num text-[56px] font-bold tracking-[1px]" : "text-[28px] font-extrabold leading-tight"}`}>
-              {title}
-            </span>
-            <span className="text-[13px] leading-[1.8] opacity-90" role="status">
-              {state.status === "failed" ? state.message : subtitle}
-            </span>
-            {on && state.note && <span className="rounded-xl bg-white/15 px-3 py-2 text-xs leading-[1.8]">{state.note}</span>}
-            {state.status === "failed" && state.blocking && (
-              <span className="flex">
-                <Button kind="white" icon="power" height={40} disabled={busy} onClick={disconnect}>
-                  قطع و باز کردن اینترنت
-                </Button>
-              </span>
-            )}
-            {server ? (
-              <Link to="/servers" className="glass-milk mt-1.5 flex max-w-[380px] items-center gap-3 rounded-[20px] py-2.5 pe-3.5 ps-2.5 no-underline">
-                <CountryBadge code={countryCode(server.name)} selected size={44} />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-xs text-ink-2">
-                    سرور · {view?.route === "smart" ? "مسیر هوشمند" : view?.route === "global" ? "مسیر سراسری" : "مسیر مستقیم"}
-                  </span>
-                  <span className="truncate text-[15px] font-extrabold text-ink">{plainName(server.name) || server.address}</span>
-                </span>
-                <PingBars ms={on ? state.delayMs : (server.delayMs ?? 0)} />
-                <span className="flex text-muted">
-                  <Icon name="chev" size={18} />
-                </span>
-              </Link>
+            {connecting ? (
+              <div className="flex flex-col">
+                <Hair />
+                {steps.map((s) => (
+                  <StepRow key={s.title} step={s} />
+                ))}
+                <span className="pt-2.5 text-xs text-ink-2">برای لغو، دوباره روی عینک بزن</span>
+              </div>
             ) : (
-              noServers && (
-                <Link to="/services" className="glass-milk mt-1.5 flex max-w-[380px] items-center gap-3 rounded-[20px] py-2.5 pe-3.5 ps-2.5 no-underline">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-soft text-link">
-                    <Icon name="link" size={20} />
-                  </span>
-                  <span className="flex flex-1 flex-col gap-0.5">
-                    <span className="text-xs text-ink-2">سرویس‌ها</span>
-                    <span className="text-[15px] font-extrabold text-ink">افزودن لینک اشتراک</span>
-                  </span>
-                  <span className="flex text-muted">
-                    <Icon name="chev" size={18} />
-                  </span>
-                </Link>
-              )
+              <>
+                <div className="flex flex-col">
+                  <Hair />
+                  <div className="flex gap-3.5">
+                    <Figure label="Down" value={on ? down.value : "—"} unit={on ? down.unit : undefined} />
+                    <Hair vertical />
+                    <Figure label="Up" value={on ? up.value : "—"} unit={on ? up.unit : undefined} />
+                    <Hair vertical />
+                    <Figure label="Ping" value={on ? String(state.delayMs) : "—"} unit={on ? "ms" : undefined} />
+                  </div>
+                  <Hair />
+                </div>
+                <div className="flex flex-col">
+                  <Hair />
+                  {server ? (
+                    <Link to="/servers" className="text-inherit no-underline">
+                      <RuleRow
+                        code={view?.autoSelect && !on ? "SV" : countryCode(server.name)}
+                        title={view?.autoSelect && !on ? "خودکار" : plainName(server.name) || server.address}
+                        hint={`سرور · ${routeFa}`}
+                        end={<Icon name="chev" size={16} />}
+                      />
+                    </Link>
+                  ) : (
+                    <Link to="/services" className="text-inherit no-underline">
+                      <RuleRow code="SV" title="افزودن لینک اشتراک" hint="اول یک سرویس بخر یا لینک اشتراکت را اضافه کن" end={<Icon name="chev" size={16} />} />
+                    </Link>
+                  )}
+                  <RuleRow
+                    code="MD"
+                    title={view?.mode === "tun" ? "حالت TUN" : "پروکسی سیستم"}
+                    end={
+                      on ? (
+                        state.mode === "tun" ? (
+                          state.killSwitch ? "Kill Switch روشن" : "همه‌ی برنامه‌ها"
+                        ) : (
+                          <span dir="ltr" className="font-num">HTTP {state.httpPort} · SOCKS {state.socksPort}</span>
+                        )
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
+                  <RuleRow code="TL" title="زمان باقی‌مانده" end={left === null ? "—" : `${faDigits(left)} روز`} />
+                </div>
+              </>
             )}
+            {failed && (
+              <div role="alert" className="flex flex-col gap-2.5 text-[13px] leading-[1.8] text-ink-2">
+                <span>{state.message}</span>
+                {state.blocking && (
+                  <span className="flex">
+                    <Button kind="white" icon="power" height={40} disabled={busy} onClick={disconnect}>
+                      قطع و باز کردن اینترنت
+                    </Button>
+                  </span>
+                )}
+              </div>
+            )}
+            {on && state.note && <span className="text-xs leading-[1.8] text-ink-2">{state.note}</span>}
           </div>
         </div>
 
-        <div className="glass-clear flex rounded-[20px] px-1 py-3.5">
-          <Stat icon="dl" label="دانلود" value={on ? down.value : "—"} unit={on ? down.unit : undefined} />
-          <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="up" label="آپلود" value={on ? up.value : "—"} unit={on ? up.unit : undefined} />
-          <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="bolt" label="تأخیر" value={on ? `${state.delayMs}` : "—"} unit={on ? "ms" : undefined} />
-          <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          {on && state.mode === "tun" ? (
-            <Stat icon="shield" label="حالت" value="TUN" unit={state.killSwitch ? "Kill Switch" : undefined} />
-          ) : (
-            <Stat icon="shield" label="پروکسی محلی" value={on ? `${state.httpPort}` : "—"} unit={on ? "HTTP" : undefined} />
-          )}
-          <span aria-hidden="true" className="w-px self-stretch bg-white/25" />
-          <Stat icon="clock" label="زمان باقی‌مانده" value={left === null ? "—" : `${faDigits(left)} روز`} />
-        </div>
-
-        {on && <SpeedGraph />}
-
-        {quota && quota.quotaGib !== null && (
-          <div className="flex flex-col gap-2 px-1">
-            <div className="flex justify-between text-xs">
-              <span className="font-bold">
-                {account?.name} — {faDigits(quota.usedGib.toFixed(1))} از {faDigits(quota.quotaGib)} گیگ
+        {quota && pct !== null && (
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between gap-3 text-[13px] font-bold">
+              <span className="truncate">
+                {account?.name} — {faDigits(quota.usedGib.toFixed(1))} از {faDigits(quota.quotaGib ?? 0)} گیگ
               </span>
-              <span className="opacity-90">{faDigits(Math.round((quota.usedGib / quota.quotaGib) * 100))}٪</span>
+              <span dir="ltr" className="font-num text-ink-2">
+                {pct}%
+              </span>
             </div>
-            <div className="flex h-2.5 gap-[3px]" aria-hidden="true">
-              {Array.from({ length: 40 }, (_, i) => (
-                <span key={i} className={`flex-1 rounded-[3px] ${i < Math.round((quota.usedGib / (quota.quotaGib ?? 1)) * 40) ? "bg-white" : "bg-white/22"}`} />
-              ))}
+            <div className="h-[3px] overflow-hidden rounded-sm bg-white/16" aria-hidden="true">
+              <div className="h-full bg-white" style={{ width: `${pct}%` }} />
             </div>
           </div>
         )}

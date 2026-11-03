@@ -46,6 +46,10 @@ export const auth = {
     inTauri ? listen<LoginStatus>("login://status", (e) => f(e.payload)) : Promise.resolve(() => {}),
 };
 
+/** A subscription or config link as a QR code (SVG markup from the Rust side). */
+export const qrCode = (link: string) => call<string>("qr_code", { link });
+export const qrSave = (link: string, path: string) => call<void>("qr_save", { link, path });
+
 /** A rejected command's message, whatever shape it arrived in. */
 export function errorText(e: unknown): string {
   if (typeof e === "string") return e;

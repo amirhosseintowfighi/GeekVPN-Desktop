@@ -2,8 +2,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "../design-system/controls";
-import { Icon } from "../design-system/Icon";
-import { Card, CardTitle, EmptyState, PageHeader } from "../design-system/layout";
+import { Card, EmptyState, PageHeader } from "../design-system/layout";
 import { support } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
@@ -30,7 +29,7 @@ export function Report() {
   if (!view?.user) {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <PageHeader title="گزارش مشکل" />
+        <PageHeader micro="Report" title="گزارش مشکل" />
         <EmptyState
           icon="flag"
           title="گزارش به پشتیبانی"
@@ -58,74 +57,69 @@ export function Report() {
   };
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-      <PageHeader title="گزارش مشکل" subtitle="پشتیبانی ← گزارش مشکل اتصال" />
-      <div className="flex min-h-0 flex-1 gap-4">
-        <Card className="flex-1 basis-0" padding={20}>
-          <CardTitle title="چه اتفاقی افتاد؟" subtitle="جواب را در «تیکت‌های من» و ربات تلگرام می‌گیری" />
-          {sent ? (
-            <div role="status" className="flex flex-col gap-3 rounded-2xl bg-ok-soft p-4 text-[13px] leading-[1.9] text-ok">
-              <span>
-                گزارش فرستاده شد. کد پیگیری:{" "}
-                <span dir="ltr" className="font-num font-bold">
-                  {sent}
-                </span>
+    <>
+      <div className="flex min-w-0 flex-1 flex-col gap-[18px] overflow-y-auto">
+        <PageHeader micro="Report" title="گزارش مشکل" subtitle="پشتیبانی ← گزارش مشکل اتصال" />
+        <span className="text-[22px] font-extrabold">چه اتفاقی افتاد؟</span>
+        <span className="-mt-3 text-xs text-ink-2">جواب را در «تیکت‌های من» و ربات تلگرام می‌گیری</span>
+        {sent ? (
+          <div role="status" className="flex flex-col gap-2 text-sm leading-[1.9]">
+            <span>
+              گزارش فرستاده شد. کد پیگیری:{" "}
+              <span dir="ltr" className="font-num font-bold">
+                {sent}
               </span>
-              <Link to="/support" className="font-bold text-link">
-                رفتن به تیکت‌های من
-              </Link>
-            </div>
-          ) : (
-            <>
+            </span>
+            <Link to="/support" className="self-start text-[13px] font-bold text-white underline underline-offset-4">
+              رفتن به تیکت‌های من
+            </Link>
+          </div>
+        ) : (
+          <>
+            <label className="flex flex-col gap-2 text-xs text-ink-2">
+              شرح مشکل
               <textarea
-                aria-label="شرح مشکل"
                 value={text}
                 maxLength={1500}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="مثلاً: از صبح با حالت TUN وصل می‌شود ولی هیچ سایتی باز نمی‌شود."
-                className="h-[130px] resize-none rounded-[14px] border border-chip-border bg-chip p-3 text-sm leading-[1.9] text-ink outline-none focus:border-link"
+                className="min-h-[150px] resize-none rounded-3xl border border-white/25 bg-white/7 px-[18px] py-4 text-[15px] leading-[1.8] text-ink outline-none placeholder:text-white/50 focus:border-white/60"
               />
-              <div className="flex gap-2 rounded-[14px] bg-soft px-3 py-2.5 text-xs leading-[1.8] text-ink-2">
-                <span className="flex text-link">
-                  <Icon name="lock" size={18} />
-                </span>
-                <span>
-                  گزارش شامل نسخه‌ی برنامه و سیستم‌عامل، نوع شبکه، حالت، نوع کانفیگ و آخرین خطای اتصال است. آدرس سرورها، UUID، IPها و لینک‌ها حذف می‌شوند.
-                </span>
-              </div>
-              {error && (
-                <span role="alert" className="text-xs text-bad">
-                  {error}
-                </span>
-              )}
-              <div className="flex gap-2.5">
-                <Button grow icon="send" height={48} disabled={busy || text.trim().length < 10} onClick={() => void send()}>
-                  {busy ? "در حال ارسال…" : "ارسال به پشتیبانی"}
-                </Button>
-                <Button kind="soft" icon={copied ? "check" : "copy"} height={48} disabled={!preview} onClick={() => void writeText(preview).then(() => setCopied(true))}>
-                  {copied ? "کپی شد" : "کپی گزارش"}
-                </Button>
-              </div>
-            </>
-          )}
-        </Card>
-        <Card className="flex-1 basis-0" padding={20}>
-          <CardTitle
-            title="گزارش فنی"
-            subtitle="همان چیزی که فرستاده می‌شود"
-            actions={
-              <Button kind="soft" icon="eye" height={36} onClick={() => setShown(!shown)}>
-                {shown ? "پنهان کردن" : "نمایش"}
+            </label>
+            <span className="text-xs leading-[1.8] text-ink-2">
+              گزارش شامل نسخه‌ی برنامه و سیستم‌عامل، نوع شبکه، حالت، نوع کانفیگ و آخرین خطای اتصال است. آدرس سرورها، UUID، IPها و لینک‌ها حذف می‌شوند.
+            </span>
+            {error && (
+              <span role="alert" className="text-xs text-bad">
+                {error}
+              </span>
+            )}
+            <div className="flex gap-2.5">
+              <Button icon="send" height={40} disabled={busy || text.trim().length < 10} onClick={() => void send()}>
+                {busy ? "در حال ارسال…" : "ارسال به پشتیبانی"}
               </Button>
-            }
-          />
-          {shown && (
-            <pre dir="ltr" className="m-0 flex-1 overflow-auto whitespace-pre-wrap rounded-[14px] bg-pay-bar p-3.5 text-left font-num text-xs leading-[1.9] text-[#CFE8FF]">
-              {preview || "…"}
-            </pre>
-          )}
-        </Card>
+              <Button kind="soft" icon={copied ? "check" : "copy"} height={40} disabled={!preview} onClick={() => void writeText(preview).then(() => setCopied(true))}>
+                {copied ? "کپی شد" : "کپی گزارش"}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+      <Card className="w-[330px] shrink-0">
+        <div className="flex items-center justify-between">
+          <span className="micro text-[9px]">Technical report</span>
+          <button type="button" onClick={() => setShown(!shown)} className="text-xs underline underline-offset-[3px]">
+            {shown ? "پنهان کردن" : "نمایش"}
+          </button>
+        </div>
+        <span className="text-[17px] font-extrabold">گزارش فنی</span>
+        <span className="text-[11px] text-ink-2">همان چیزی که فرستاده می‌شود</span>
+        {shown && (
+          <pre dir="ltr" className="m-0 flex-1 overflow-auto whitespace-pre-wrap rounded-[18px] border border-white/15 bg-black/35 p-3.5 text-left font-mono text-[11px] leading-[1.8] text-white/80 select-text">
+            {preview || "…"}
+          </pre>
+        )}
+      </Card>
+    </>
   );
 }

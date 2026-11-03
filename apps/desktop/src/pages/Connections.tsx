@@ -72,7 +72,7 @@ export function Connections() {
   if (!tun || !available) {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <PageHeader title="اتصالات" />
+        <PageHeader micro="Connections" title="اتصالات" />
         <EmptyState
           icon="hub"
           title={on ? "فهرست اتصال‌ها در حالت TUN" : "اتصالی باز نیست"}
@@ -96,6 +96,7 @@ export function Connections() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
       <PageHeader
+        micro="Connections"
         title="اتصالات"
         subtitle={`${faDigits(counts.all)} اتصال فعال${server ? ` از طریق ${plainName(server.name) || server.address}` : ""}`}
         actions={
@@ -120,11 +121,11 @@ export function Connections() {
         </div>
       </div>
       {error && (
-        <span role="alert" className="rounded-xl bg-white/15 px-3 py-2 text-xs">
+        <span role="alert" className="rounded-[18px] bg-white/15 px-3 py-2 text-xs">
           {error}
         </span>
       )}
-      <section className="glass-milk flex min-h-0 flex-1 flex-col overflow-hidden rounded-[26px]">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-hair">
         <div className="grid grid-cols-[minmax(0,1fr)_90px_90px_110px_100px_36px] gap-3 border-b border-hair px-4 py-2.5 text-xs font-bold text-ink-2">
           <span>مقصد و برنامه</span>
           <span>آپلود</span>
@@ -140,7 +141,7 @@ export function Connections() {
               className="grid grid-cols-[minmax(0,1fr)_90px_90px_110px_100px_36px] items-center gap-3 border-b border-hair px-4 py-2 last:border-b-0"
             >
               <span className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-soft font-num text-sm font-bold text-link">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-soft font-num text-sm font-bold text-link">
                   {(c.process || c.host).slice(0, 1).toUpperCase()}
                 </span>
                 <span className="flex min-w-0 flex-col">

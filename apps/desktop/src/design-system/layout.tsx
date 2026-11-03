@@ -1,20 +1,21 @@
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./Icon";
 
-/** Milk-glass card, the design's main surface. */
-export function Card({ children, className = "", padding = 16 }: { children: ReactNode; className?: string; padding?: number }) {
+/** Frosted-glass panel, the design's side cards. */
+export function Card({ children, className = "", padding = 20 }: { children: ReactNode; className?: string; padding?: number }) {
   return (
-    <section style={{ padding }} className={`glass-milk flex flex-col gap-3 rounded-3xl ${className}`}>
+    <section style={{ padding }} className={`glass-milk flex flex-col gap-3 rounded-[26px] ${className}`}>
       {children}
     </section>
   );
 }
 
-export function CardTitle({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+export function CardTitle({ title, subtitle, actions, micro }: { title: string; subtitle?: string; actions?: ReactNode; micro?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="flex flex-1 flex-col">
-        <span className="text-base font-extrabold">{title}</span>
+      <span className="flex flex-1 flex-col gap-0.5">
+        {micro && <span className="micro">{micro}</span>}
+        <span className="text-[17px] font-extrabold">{title}</span>
         {subtitle && <span className="text-xs text-ink-2">{subtitle}</span>}
       </span>
       {actions}
@@ -22,36 +23,40 @@ export function CardTitle({ title, subtitle, actions }: { title: string; subtitl
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+/**
+ * The top of every page: a Latin micro-label, the Persian title at 40px, a
+ * line under it, and a hairline across (Desktop-Report and the rest).
+ */
+export function PageHeader({ title, subtitle, actions, micro }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; micro?: string }) {
   return (
-    <header className="flex items-center gap-3">
-      <div className="flex flex-1 flex-col gap-0.5">
-        <h1 className="m-0 text-[26px] font-extrabold tracking-[-0.3px]">{title}</h1>
-        {subtitle && <span className="text-[13px] opacity-90">{subtitle}</span>}
+    <header className="flex shrink-0 flex-col gap-[18px]">
+      <div className="flex items-end justify-between gap-5">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {micro && <span className="micro">{micro}</span>}
+          <h1 className="m-0 text-[40px] font-extrabold leading-[1.2]">{title}</h1>
+          {subtitle && <span className="text-sm text-ink-2">{subtitle}</span>}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2.5">{actions}</div>}
       </div>
-      {actions}
+      <div aria-hidden="true" className="h-px bg-hair" />
     </header>
   );
 }
 
 type RowTone = "link" | "ok" | "warn" | "bad";
-const ROW_TONE: Record<RowTone, string> = {
-  link: "bg-soft text-link",
-  ok: "bg-ok-soft text-ok",
-  warn: "bg-warn-soft text-warn",
-  bad: "bg-bad-soft text-bad",
-};
 
-/** A settings/list row inside a `Group`: icon tile, title, hint, trailing control. */
+/**
+ * A ruled row (Desktop-Settings, Desktop-Account): the title, a hint under
+ * it and the control at the end, between hairlines. `icon` and `tone` are
+ * kept for callers; the design draws no icon tile.
+ */
 export function Row({
-  icon,
   title,
   hint,
   trailing,
-  tone = "link",
   onClick,
 }: {
-  icon: IconName;
+  icon?: IconName;
   title: string;
   hint?: ReactNode;
   trailing?: ReactNode;
@@ -60,19 +65,16 @@ export function Row({
 }) {
   const body = (
     <>
-      <span className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl ${ROW_TONE[tone]}`}>
-        <Icon name={icon} size={19} />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-px text-start">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-start">
         <span className="text-sm font-bold text-ink">{title}</span>
-        {hint && <span className="text-xs text-ink-2">{hint}</span>}
+        {hint && <span className="text-[11px] leading-[1.7] text-ink-2">{hint}</span>}
       </span>
-      {trailing ?? (onClick && <span className="flex text-muted"><Icon name="chev" size={18} /></span>)}
+      {trailing ?? (onClick && <span className="flex text-ink-2"><Icon name="chev" size={16} /></span>)}
     </>
   );
-  const cls = "flex w-full items-center gap-3 border-b border-hair px-3.5 py-[11px] last:border-b-0";
+  const cls = "flex w-full items-center gap-3 border-b border-hair py-2.5 last:border-b-0";
   return onClick ? (
-    <button type="button" onClick={onClick} className={cls}>
+    <button type="button" onClick={onClick} className={`${cls} transition-colors hover:bg-white/5`}>
       {body}
     </button>
   ) : (
@@ -80,11 +82,12 @@ export function Row({
   );
 }
 
-export function Group({ label, children }: { label?: string; children: ReactNode }) {
+/** A section of ruled rows under a micro-label. */
+export function Group({ label, micro, children }: { label?: string; micro?: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2">
-      {label && <span className="text-[13px] font-bold text-white/90">{label}</span>}
-      <div className="glass-milk overflow-hidden rounded-[22px]">{children}</div>
+    <div className="flex flex-col gap-1">
+      {micro ? <span className="micro text-[9px] tracking-[0.22em]">{micro}</span> : label && <span className="text-xs font-bold text-ink-2">{label}</span>}
+      <div className="flex flex-col border-y border-hair">{children}</div>
     </div>
   );
 }
@@ -96,11 +99,11 @@ export function Group({ label, children }: { label?: string; children: ReactNode
 export function EmptyState({ icon, title, text, action }: { icon: IconName; title: string; text: string; action?: ReactNode }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <span className="glass-clear flex h-16 w-16 items-center justify-center rounded-[21px]">
+      <span className="glass-milk flex h-16 w-16 items-center justify-center rounded-full">
         <Icon name={icon} size={30} stroke={1.8} />
       </span>
       <span className="text-lg font-extrabold">{title}</span>
-      <span className="max-w-[420px] text-[13px] leading-[1.9] opacity-90">{text}</span>
+      <span className="max-w-[420px] text-[13px] leading-[1.9] text-ink-2">{text}</span>
       {action}
     </div>
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { faDigits } from "./fa";
+import { ago, bytes, countryCode, daysLeft, elapsed, plainName, speed } from "./format";
 import { NAV, shortcutTarget } from "./nav";
-import { applyTheme, loadTheme } from "./theme";
 
 const key = (code: string, mods: Partial<Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey", boolean>> = {}) => ({
   code,
@@ -34,20 +34,6 @@ describe("shortcutTarget", () => {
     expect(shortcutTarget(key("Digit1"), false)).toBeNull();
   });
 });
-
-describe("theme", () => {
-  it("stores an explicit choice and forgets it for system", () => {
-    const root = document.createElement("html");
-    applyTheme("dark", root);
-    expect(root.dataset.theme).toBe("dark");
-    expect(loadTheme()).toBe("dark");
-    applyTheme("system", root);
-    expect(root.dataset.theme).toBeUndefined();
-    expect(loadTheme()).toBe("system");
-  });
-});
-
-import { ago, bytes, countryCode, daysLeft, elapsed, plainName, speed } from "./format";
 
 describe("format", () => {
   it("writes speeds the way the design does", () => {

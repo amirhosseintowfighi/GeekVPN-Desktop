@@ -3,13 +3,14 @@ import { Icon, type IconName } from "./Icon";
 
 type ButtonKind = "action" | "soft" | "accent" | "danger" | "white" | "clear";
 
+// Foundations: solid white for the action, frosted glass for the rest.
 const BUTTON_KIND: Record<ButtonKind, string> = {
-  action: "bg-action text-on-action shadow-[var(--gv-action-shadow)]",
-  soft: "bg-soft-button text-ink",
-  accent: "bg-logo text-[#062845]",
-  danger: "bg-bad-soft text-bad border border-bad-border",
-  white: "bg-white text-[#062845]",
-  clear: "glass-clear",
+  action: "bg-action text-on-action font-extrabold shadow-[var(--gv-action-shadow)]",
+  soft: "glass-milk font-bold",
+  accent: "bg-light text-white font-extrabold",
+  danger: "bg-bad-soft text-bad border border-bad-border font-bold",
+  white: "bg-white text-navy font-extrabold",
+  clear: "glass-clear font-bold",
 };
 
 export function Button({
@@ -32,7 +33,7 @@ export function Button({
       type="button"
       {...rest}
       style={{ height }}
-      className={`flex items-center justify-center gap-2 rounded-[14px] px-4 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-55 ${
+      className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55 ${
         grow ? "flex-1 basis-0" : ""
       } ${BUTTON_KIND[kind]} ${className}`}
     >
@@ -54,22 +55,22 @@ export function IconButton({
   kind?: "soft" | "clear" | "action";
   size?: number;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
-  const look = kind === "soft" ? "bg-soft text-link" : kind === "clear" ? "glass-clear" : "bg-action text-on-action";
+  const look = kind === "soft" ? "glass-milk" : kind === "clear" ? "glass-clear" : "bg-action text-on-action";
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       {...rest}
-      style={{ width: size, height: size, borderRadius: size < 44 ? 13 : 15 }}
-      className={`flex shrink-0 items-center justify-center disabled:opacity-55 ${look}`}
+      style={{ width: size, height: size }}
+      className={`flex shrink-0 items-center justify-center rounded-full disabled:opacity-55 ${look}`}
     >
       <Icon name={icon} size={19} />
     </button>
   );
 }
 
-/** `onNavy`: on the navy hero cards, where the usual navy track would vanish. */
+/** Foundations' pill switch: white with a navy knob when on. `onNavy` is kept for callers; the look is one. */
 export function Switch({
   checked,
   onChange,
@@ -81,8 +82,9 @@ export function Switch({
   label: string;
   onNavy?: boolean;
 }) {
-  const track = checked ? (onNavy ? "justify-end bg-logo" : "justify-end bg-action") : onNavy ? "justify-start bg-white/25" : "justify-start bg-track";
-  const knob = checked ? (onNavy ? "bg-[#062845]" : "bg-action-accent") : "bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)]";
+  void onNavy;
+  const track = checked ? "justify-start bg-white" : "justify-end bg-white/16 border border-white/30";
+  const knob = checked ? "bg-navy" : "bg-white";
   return (
     <button
       type="button"
@@ -90,14 +92,14 @@ export function Switch({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`flex h-[30px] w-[50px] shrink-0 items-center rounded-[9px] p-[3px] transition-colors ${track}`}
+      className={`box-border flex h-[26px] w-11 shrink-0 items-center rounded-full p-[3px] transition-colors ${track}`}
     >
-      <span className={`h-6 w-6 rounded-[7px] ${knob}`} />
+      <span className={`h-5 w-5 rounded-full ${knob}`} />
     </button>
   );
 }
 
-/** One-of-n picker on milk glass (route mode, theme, failover threshold). */
+/** One-of-n picker in a glass pill (route mode, failover threshold). */
 export function Segmented<T extends string>({
   options,
   value,
@@ -112,7 +114,7 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-[14px] bg-soft-button p-1">
+    <div role="radiogroup" aria-label={label} style={{ height }} className="glass-milk box-border flex items-center gap-1 rounded-full px-1">
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -123,8 +125,8 @@ export function Segmented<T extends string>({
             aria-checked={on}
             onClick={() => onChange(o.value)}
             style={{ height: height - 8 }}
-            className={`flex-1 basis-0 rounded-[11px] text-[13px] font-bold transition-colors ${
-              on ? "bg-action text-on-action" : "text-ink"
+            className={`flex-1 basis-0 whitespace-nowrap rounded-full text-[13px] transition-colors ${
+              on ? "bg-white font-extrabold text-navy" : "font-bold text-white/78 hover:text-white"
             }`}
           >
             {o.label}
@@ -135,7 +137,7 @@ export function Segmented<T extends string>({
   );
 }
 
-/** Filter chips on the blue backdrop (white when selected, clear glass otherwise). */
+/** Filter chips (white when selected, quiet glass otherwise). */
 export function ClearChips<T extends string>({
   options,
   value,
@@ -153,8 +155,8 @@ export function ClearChips<T extends string>({
           type="button"
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`h-9 rounded-xl px-3.5 text-[13px] font-bold ${
-            o.value === value ? "bg-white text-[#062845]" : "glass-clear"
+          className={`h-9 whitespace-nowrap rounded-full px-4 text-[13px] ${
+            o.value === value ? "bg-white font-extrabold text-navy" : "glass-clear font-bold"
           }`}
         >
           {o.label}
@@ -174,47 +176,16 @@ const TONE: Record<Tone, string> = {
 
 export function Badge({ tone = "ok", children }: { tone?: Tone; children: ReactNode }) {
   return (
-    <span className={`flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[9px] px-2.5 text-xs font-extrabold ${TONE[tone]}`}>
-      <span className="h-[7px] w-[7px] rounded-[2px] bg-current" />
+    <span className={`flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-extrabold ${TONE[tone]}`}>
+      <span className="h-[7px] w-[7px] rounded-full bg-current" />
       {children}
-    </span>
-  );
-}
-
-/** Four signal bars for a real-delay result; `ms` 0 or less means no answer. */
-export function PingBars({ ms }: { ms: number }) {
-  const level = ms <= 0 ? 0 : ms < 150 ? 4 : ms < 250 ? 3 : ms < 450 ? 2 : 1;
-  const color = level >= 3 ? "var(--gv-ok)" : level === 2 ? "var(--gv-warn)" : "var(--gv-bad)";
-  return (
-    <span className="flex items-center gap-2">
-      <span dir="ltr" className="font-num text-xs font-semibold text-ink-2">
-        {ms > 0 ? `${ms}ms` : "—"}
-      </span>
-      <span aria-hidden="true" dir="ltr" className="flex h-[17px] items-end gap-0.5">
-        {[5, 9, 13, 17].map((h, i) => (
-          <span key={h} className="w-1 rounded-sm" style={{ height: h, background: i < level ? color : "var(--gv-track)" }} />
-        ))}
-      </span>
-    </span>
-  );
-}
-
-export function CountryBadge({ code, selected, size = 40 }: { code: string; selected?: boolean; size?: number }) {
-  return (
-    <span
-      style={{ width: size, height: size }}
-      className={`flex shrink-0 items-center justify-center rounded-xl font-num text-xs font-bold tracking-[0.5px] ${
-        selected ? "bg-action text-on-action" : "bg-soft text-ink"
-      }`}
-    >
-      {code}
     </span>
   );
 }
 
 export function SearchField({ id, placeholder, value, onChange }: { id: string; placeholder: string; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex h-10 items-center gap-2 rounded-xl bg-soft-button px-3 text-muted">
+    <div className="flex h-10 items-center gap-2 rounded-full border border-hair bg-white/8 px-3.5 text-ink-2">
       <label htmlFor={id} className="sr-only">
         {placeholder}
       </label>
@@ -224,8 +195,65 @@ export function SearchField({ id, placeholder, value, onChange }: { id: string; 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="min-w-0 flex-1 border-none bg-transparent text-[13px] text-ink outline-none"
+        className="min-w-0 flex-1 border-none bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-2"
       />
     </div>
+  );
+}
+
+/** Space Grotesk micro-label over a section ("Servers", "Home"…). */
+export function Micro({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <span className={`micro ${className}`}>{children}</span>;
+}
+
+/** The design's hairline rule. */
+export function Hair({ vertical }: { vertical?: boolean }) {
+  return vertical ? <span aria-hidden="true" className="w-px shrink-0 self-stretch bg-hair" /> : <div aria-hidden="true" className="h-px shrink-0 bg-hair" />;
+}
+
+/**
+ * A ruled list row (Desktop-Home «DE · آلمان»): a short Latin code, the
+ * title with a hint under it, and a value or control at the end.
+ */
+export function RuleRow({
+  code,
+  title,
+  hint,
+  end,
+  onClick,
+  selected,
+  size = 16,
+}: {
+  code?: string;
+  title: ReactNode;
+  hint?: ReactNode;
+  end?: ReactNode;
+  onClick?: () => void;
+  selected?: boolean;
+  size?: number;
+}) {
+  const body = (
+    <>
+      {code !== undefined && (
+        <span dir="ltr" className="w-[30px] shrink-0 text-right font-num text-[10px] tracking-[0.18em] text-ink-2">
+          {code}
+        </span>
+      )}
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-start">
+        <span className="truncate font-bold" style={{ fontSize: size }}>
+          {title}
+        </span>
+        {hint && <span className="truncate text-xs text-ink-2">{hint}</span>}
+      </span>
+      {end !== undefined && <span className="shrink-0 whitespace-nowrap text-[13px] text-ink-2">{end}</span>}
+    </>
+  );
+  const cls = `flex min-h-6 w-full items-center gap-3 border-b border-hair py-3 last:border-b-0 ${selected ? "-mx-3 rounded-2xl border-transparent bg-white px-3 text-navy [&_span]:text-navy" : ""}`;
+  return onClick ? (
+    <button type="button" onClick={onClick} aria-pressed={selected} className={`${cls} transition-colors hover:bg-white/5`}>
+      {body}
+    </button>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }

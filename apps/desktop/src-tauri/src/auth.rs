@@ -259,7 +259,46 @@ pub fn qr_svg(link: &str) -> Result<String, String> {
     Ok(code
         .render::<svg::Color<'_>>()
         .min_dimensions(196, 196)
-        .dark_color(svg::Color("#062845"))
+        .dark_color(svg::Color("#07123A"))
         .light_color(svg::Color("#FFFFFF"))
         .build())
+}
+
+/// A link's QR code as SVG, for «لینک و QR» on the Services page. Only
+/// subscription and config links are drawn, never arbitrary text.
+fn shareable(link: &str) -> Result<&str, String> {
+    let link = link.trim();
+    let ok = link.len() <= 4096 && ["https://", "http://", "vless://", "vmess://", "trojan://", "ss://"].iter().any(|p| link.starts_with(p));
+    if ok {
+        Ok(link)
+    } else {
+        Err("این لینک قابل اشتراک نیست.".into())
+    }
+}
+
+#[tauri::command]
+pub fn qr_code(link: String) -> Result<String, String> {
+    qr_svg(shareable(&link)?)
+}
+
+/// «ذخیره‌ی QR»: the same SVG written where the customer chose in the save
+/// dialog (an `.svg` path only).
+#[tauri::command]
+pub fn qr_save(link: String, path: String) -> Result<(), String> {
+    let path = std::path::PathBuf::from(path);
+    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg")) {
+        return Err("فایل QR باید پسوند svg داشته باشد.".into());
+    }
+    let svg = qr_svg(shareable(&link)?)?;
+    std::fs::write(&path, svg).map_err(|e| format!("ذخیره نشد: {e}"))
+}
+
+#[cfg(test)]
+mod qr_tests {
+    #[test]
+    fn only_links_are_drawn() {
+        assert!(super::qr_code("https://sub.example.com/x".into()).unwrap().contains("<svg"));
+        assert!(super::qr_code("rm -rf /".into()).is_err());
+        assert!(super::qr_save("https://a.example".into(), "/tmp/x.sh".into()).is_err());
+    }
 }

@@ -34,9 +34,6 @@ importers:
       react-router:
         specifier: ^8.4.0
         version: 8.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      vazirmatn:
-        specifier: ^33.0.3
-        version: 33.0.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
@@ -1230,9 +1227,6 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
-  vazirmatn@33.0.3:
-    resolution: {integrity: sha512-fbjNc0CMjazZpIegWzz9OHGzI1APFboT+x7ZecXlUCtDe/nkyx7gtCTZnWS/+eeXG7fbfXymCPKJI8EsnM3iqw==}
-
   vite@8.3.2:
     resolution: {integrity: sha512-SQr1x6W5vVSbROg7vsyXIaxK9b0G7zsT68acdWWRmnBUsgDieLCRG+Rep9WdZgcposvv/GSnr4GUUBqB3vXq6w==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2279,8 +2273,6 @@ snapshots:
       browserslist: 4.29.2
       escalade: 3.2.0
       picocolors: 1.1.1
-
-  vazirmatn@33.0.3: {}
 
   vite@8.3.2(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0):
     dependencies:

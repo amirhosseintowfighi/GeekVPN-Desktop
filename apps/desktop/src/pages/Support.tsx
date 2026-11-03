@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Badge, Button, Segmented } from "../design-system/controls";
+import { Button, Segmented } from "../design-system/controls";
 import { Icon } from "../design-system/Icon";
-import { CardTitle, EmptyState, PageHeader } from "../design-system/layout";
+import { EmptyState, PageHeader } from "../design-system/layout";
 import { support, TICKET_STATE, TOPICS, type Ticket, type TicketMessage, type TicketTopic } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
@@ -24,12 +24,12 @@ function Bubble({ m }: { m: TicketMessage }) {
   // RTL: the customer's own messages on the start side, support's on the end.
   return m.fromSupport ? (
     <div className="flex max-w-[70%] flex-col items-end gap-1 self-end">
-      <div className="whitespace-pre-line rounded-[18px_18px_6px_18px] bg-soft-button px-3.5 py-3 text-[13px] leading-[1.9] text-ink">{m.bodyFa}</div>
+      <div className="glass-milk whitespace-pre-line rounded-[20px_20px_6px_20px] px-4 py-3 text-[13px] leading-[1.9]">{m.bodyFa}</div>
       <span className="text-[11px] text-ink-2">پشتیبانی · {when(m.createdAt)}</span>
     </div>
   ) : (
     <div className="flex max-w-[70%] flex-col gap-1 self-start">
-      <div className="whitespace-pre-line rounded-[18px_18px_18px_6px] bg-action px-3.5 py-3 text-[13px] leading-[1.9] text-on-action">{m.bodyFa}</div>
+      <div className="whitespace-pre-line rounded-[20px_20px_20px_6px] bg-white px-4 py-3 text-[13px] leading-[1.9] text-navy">{m.bodyFa}</div>
       <span className="text-[11px] text-ink-2">تو · {when(m.createdAt)}</span>
     </div>
   );
@@ -53,9 +53,8 @@ function NewTicket({ onOpened, onCancel }: { onOpened: (t: Ticket) => void; onCa
     }
   };
   return (
-    <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-[18px]">
-      <CardTitle title="تیکت جدید" subtitle="جواب را همین‌جا و در ربات تلگرام می‌گیری" />
-      <span className="text-xs font-bold text-ink-2">موضوع</span>
+    <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
+      <span className="micro text-[9px]">Topic</span>
       <Segmented label="موضوع" options={TOPICS} value={topic} onChange={setTopic} />
       <label className="flex flex-col gap-1.5 text-xs font-bold text-ink-2">
         عنوان (اختیاری)
@@ -68,7 +67,7 @@ function NewTicket({ onOpened, onCancel }: { onOpened: (t: Ticket) => void; onCa
           maxLength={4000}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="مشکلت را بنویس… (حداقل ۱۰ حرف)"
-          className="min-h-[140px] flex-1 resize-none rounded-[14px] border border-chip-border bg-chip p-3 text-[13px] leading-[1.9] text-ink outline-none focus:border-link"
+          className="min-h-[140px] flex-1 resize-none rounded-[18px] border border-white/25 bg-white/7 p-3 text-[13px] leading-[1.9] text-ink outline-none focus:border-link"
         />
       </label>
       {error && (
@@ -142,7 +141,7 @@ export function Support() {
   if (!signedIn) {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <PageHeader title="پشتیبانی" />
+        <PageHeader micro="Support" title="پشتیبانی" />
         <EmptyState
           icon="chat"
           title="تیکت‌های من"
@@ -175,113 +174,103 @@ export function Support() {
     }
   };
 
+  const st = current ? TICKET_STATE[current.state] ?? { label: current.state, tone: "link" as const } : null;
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-      <PageHeader title="پشتیبانی" subtitle="هر ۲۰ ثانیه تازه می‌شود" />
-      <div className="flex min-h-0 flex-1 gap-4">
-        <section className="glass-milk flex w-[330px] shrink-0 flex-col gap-2 rounded-[26px] p-3.5">
-          <CardTitle title="تیکت‌های من" subtitle="جواب‌ها در ربات تلگرام هم می‌آیند" />
-          <Button icon="plus" onClick={() => setComposing(true)}>
-            تیکت جدید
-          </Button>
-          <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-1">
-            {tickets === null && !error && <span className="p-3 text-[13px] text-ink-2">در حال خواندن…</span>}
-            {tickets?.length === 0 && <span className="p-3 text-center text-[13px] leading-[1.9] text-ink-2">هنوز تیکتی نداری.</span>}
-            {tickets?.map((t) => {
-              const sel = t.ticketId === openId && !composing;
-              const st = TICKET_STATE[t.state] ?? { label: t.state, tone: "link" as const };
-              return (
-                <button
-                  key={t.ticketId}
-                  type="button"
-                  aria-pressed={sel}
-                  onClick={() => {
-                    setComposing(false);
-                    setOpenId(t.ticketId);
+    <>
+      <div className="flex min-w-0 flex-1 flex-col gap-[18px]">
+        <PageHeader
+          micro={composing || !current ? "Support" : `Support · ${current.reference}`}
+          title={composing ? "تیکت جدید" : current ? current.topicFa || "تیکت" : "پشتیبانی"}
+          subtitle={composing ? "جواب را همین‌جا و در ربات تلگرام می‌گیری" : st ? `${st.label} · هر ۲۰ ثانیه تازه می‌شود` : "هر ۲۰ ثانیه تازه می‌شود"}
+          actions={
+            <Link to="/report" className="glass-milk flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold text-white no-underline">
+              <Icon name="flag" size={16} />
+              گزارش مشکل اتصال
+            </Link>
+          }
+        />
+        {composing ? (
+          <NewTicket
+            onCancel={() => setComposing(false)}
+            onOpened={(t) => {
+              setComposing(false);
+              setTickets((l) => [t, ...(l ?? []).filter((x) => x.ticketId !== t.ticketId)]);
+              setOpenId(t.ticketId);
+            }}
+          />
+        ) : !current ? (
+          <p className="m-auto p-6 text-center text-[13px] leading-[1.9] text-ink-2">{tickets?.length === 0 ? "هنوز تیکتی نداری؛ «تیکت جدید» بساز." : "یک تیکت را انتخاب کن یا تیکت جدید بساز."}</p>
+        ) : (
+          <>
+            <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pe-1 [scrollbar-width:thin]">
+              <div className="flex-1" />
+              {thread === null ? <span className="text-[13px] text-ink-2">در حال خواندن…</span> : thread.map((m) => <Bubble key={m.messageId} m={m} />)}
+              <div ref={end} />
+            </div>
+            {error && (
+              <span role="alert" className="text-xs text-bad">
+                {error}
+              </span>
+            )}
+            {closed ? (
+              <p className="m-0 text-center text-xs text-ink-2">این تیکت بسته شده؛ برای موضوع تازه، تیکت جدید بساز.</p>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <textarea
+                  aria-label="جوابت"
+                  value={reply}
+                  maxLength={4000}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && reply.trim().length >= MIN_MESSAGE) void send();
                   }}
-                  className={`flex flex-col gap-1.5 rounded-2xl px-3.5 py-3 text-start text-ink ${sel ? "border-2 border-link bg-soft" : "border-2 border-transparent hover:bg-soft/60"}`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="flex-1 truncate text-sm font-extrabold">{t.topicFa || "تیکت"}</span>
-                    {t.unreadCount > 0 && <Badge tone="bad">{faDigits(t.unreadCount)} جدید</Badge>}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span dir="ltr" className="flex-1 text-right font-num text-[11px] text-muted">
-                      {t.reference}
-                    </span>
-                    <Badge tone={st.tone}>{st.label}</Badge>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <Link to="/report" className="flex items-center gap-2.5 rounded-2xl bg-soft-button p-3 text-ink no-underline">
-            <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-warn-soft text-warn">
-              <Icon name="flag" size={18} />
-            </span>
-            <span className="flex flex-col">
-              <span className="text-[13px] font-extrabold">گزارش مشکل اتصال</span>
-              <span className="text-[11px] text-ink-2">با گزارش فنی حذف‌شده از اطلاعات حساس</span>
-            </span>
-          </Link>
-        </section>
-
-        <section className="glass-milk flex min-w-0 flex-1 flex-col overflow-hidden rounded-[26px] text-ink">
-          {composing ? (
-            <NewTicket
-              onCancel={() => setComposing(false)}
-              onOpened={(t) => {
-                setComposing(false);
-                setTickets((l) => [t, ...(l ?? []).filter((x) => x.ticketId !== t.ticketId)]);
-                setOpenId(t.ticketId);
-              }}
-            />
-          ) : !current ? (
-            <p className="m-auto p-6 text-center text-[13px] leading-[1.9] text-ink-2">یک تیکت را انتخاب کن یا تیکت جدید بساز.</p>
-          ) : (
-            <>
-              <div className="flex items-center gap-2.5 border-b border-hair px-[18px] py-3.5">
-                <span className="flex flex-1 flex-col">
-                  <span className="text-base font-extrabold">{current.topicFa || "تیکت"}</span>
-                  <span dir="ltr" className="text-right font-num text-[11px] text-muted">
-                    {current.reference}
-                  </span>
-                </span>
-                <Badge tone={(TICKET_STATE[current.state] ?? { tone: "link" }).tone}>{TICKET_STATE[current.state]?.label ?? current.state}</Badge>
+                  placeholder="جوابت را بنویس… (حداقل ۱۰ حرف)"
+                  className="h-12 flex-1 resize-none rounded-full border border-white/25 bg-white/7 px-5 py-3 text-[13px] text-ink outline-none focus:border-white/60"
+                />
+                <Button icon="send" height={48} disabled={busy || reply.trim().length < MIN_MESSAGE} onClick={() => void send()}>
+                  ارسال
+                </Button>
               </div>
-              <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto p-[18px]">
-                {thread === null ? <span className="text-[13px] text-ink-2">در حال خواندن…</span> : thread.map((m) => <Bubble key={m.messageId} m={m} />)}
-                <div ref={end} />
-              </div>
-              {error && (
-                <span role="alert" className="px-4 pb-1 text-xs text-bad">
-                  {error}
-                </span>
-              )}
-              {closed ? (
-                <p className="m-0 border-t border-hair p-3 text-center text-xs text-ink-2">این تیکت بسته شده؛ برای موضوع تازه، تیکت جدید بساز.</p>
-              ) : (
-                <div className="flex items-end gap-2 border-t border-hair p-3">
-                  <textarea
-                    aria-label="جوابت"
-                    value={reply}
-                    maxLength={4000}
-                    onChange={(e) => setReply(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && reply.trim().length >= MIN_MESSAGE) void send();
-                    }}
-                    placeholder="جوابت را بنویس… (حداقل ۱۰ حرف)"
-                    className="h-12 flex-1 resize-none rounded-[14px] border border-chip-border bg-chip p-3 text-[13px] text-ink outline-none focus:border-link"
-                  />
-                  <Button icon="send" height={48} disabled={busy || reply.trim().length < MIN_MESSAGE} onClick={() => void send()}>
-                    ارسال
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </section>
+            )}
+          </>
+        )}
       </div>
-    </div>
+
+      <section className="glass-milk flex w-[300px] shrink-0 flex-col gap-3 rounded-[30px] p-5">
+        <span className="text-lg font-extrabold">تیکت‌های من</span>
+        <span className="text-[11px] text-ink-2">جواب‌ها در ربات تلگرام هم می‌آیند</span>
+        <Button kind="soft" icon="plus" height={40} onClick={() => setComposing(true)}>
+          تیکت جدید
+        </Button>
+        <div className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1 [scrollbar-width:thin]">
+          {tickets === null && !error && <span className="p-3 text-[13px] text-ink-2">در حال خواندن…</span>}
+          {tickets?.length === 0 && <span className="p-3 text-center text-[13px] leading-[1.9] text-ink-2">هنوز تیکتی نداری.</span>}
+          {tickets?.map((t) => {
+            const sel = t.ticketId === openId && !composing;
+            const tst = TICKET_STATE[t.state] ?? { label: t.state, tone: "link" as const };
+            return (
+              <button
+                key={t.ticketId}
+                type="button"
+                aria-pressed={sel}
+                onClick={() => {
+                  setComposing(false);
+                  setOpenId(t.ticketId);
+                }}
+                className={`flex flex-col gap-1 py-3 text-start ${sel ? "-mx-2 rounded-[18px] bg-white px-3.5 text-navy" : "border-b border-hair hover:bg-white/5"}`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="flex-1 truncate text-sm font-extrabold">{t.topicFa || "تیکت"}</span>
+                  {t.unreadCount > 0 && <span className={`text-[11px] font-extrabold ${sel ? "" : "text-blue-text"}`}>{faDigits(t.unreadCount)} جدید</span>}
+                </span>
+                <span className={`truncate text-[11px] ${sel ? "text-navy/70" : "text-ink-2"}`}>
+                  {tst.label} · <span dir="ltr" className="font-num">{t.reference}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </>
   );
 }

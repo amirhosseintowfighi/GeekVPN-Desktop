@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Badge, Button, Segmented } from "../design-system/controls";
 import { Icon, type IconName } from "../design-system/Icon";
-import { Card, CardTitle, EmptyState, PageHeader } from "../design-system/layout";
+import { Card, EmptyState, PageHeader } from "../design-system/layout";
 import { customVolume, durationLabel, planGrid, shop, termGib, toman, type CouponPreview, type PaymentStart, type Quote, type ShopView } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
@@ -28,8 +28,8 @@ const METHOD_ICON: Record<string, IconName> = { card: "copy", crypto: "key" };
 
 export function WalletChip({ balance }: { balance: number | null }) {
   return (
-    <Link to="/account" className="glass-clear flex h-10 items-center gap-2 rounded-[13px] pe-3 ps-1.5 text-[13px] font-bold text-white no-underline">
-      <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-white text-[#062845]">
+    <Link to="/account" className="glass-clear flex h-10 items-center gap-2 rounded-full pe-3 ps-1.5 text-[13px] font-bold text-white no-underline">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-navy">
         <Icon name="wallet" size={16} />
       </span>
       {balance === null ? "کیف پول" : `${toman(balance)} تومان`}
@@ -136,7 +136,7 @@ export function Shop() {
   if (!auth?.user) {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <PageHeader title="فروشگاه" />
+        <PageHeader micro="Shop" title="فروشگاه" />
         <EmptyState
           icon="bag"
           title="برای خرید وارد شو"
@@ -215,7 +215,7 @@ export function Shop() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-      <PageHeader title="فروشگاه" subtitle="قیمت نهایی را فقط سرور حساب می‌کند" actions={<WalletChip balance={balance} />} />
+      <PageHeader micro="Shop" title="فروشگاه" subtitle="قیمت نهایی را فقط سرور حساب می‌کند" actions={<WalletChip balance={balance} />} />
       {renewing && (
         <div className="glass-clear flex items-center gap-2 rounded-[18px] px-4 py-2.5 text-[13px] font-bold">
           <Icon name="refresh" size={17} />
@@ -240,8 +240,11 @@ export function Shop() {
       )}
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <Card className="min-w-0 flex-1 basis-0 overflow-y-auto" padding={20}>
-          <CardTitle title="نوع سرویس" subtitle={TIER_HINT[(kind && grid.tierOf(kind)) ?? ""] ?? ""} />
+        <div className="flex min-w-0 flex-1 basis-0 flex-col gap-3 overflow-y-auto pe-1 [scrollbar-width:thin]">
+          <div className="flex items-center justify-between gap-3">
+            <span className="micro text-[9px]">Service type</span>
+            <span className="truncate text-[11px] text-ink-2">{TIER_HINT[(kind && grid.tierOf(kind)) ?? ""] ?? ""}</span>
+          </div>
           {data === null && !loadError ? (
             <span className="text-[13px] text-ink-2">در حال خواندن فروشگاه…</span>
           ) : loadError ? null : grid.kinds.length === 0 ? (
@@ -255,7 +258,7 @@ export function Shop() {
                 value={kind ?? grid.kinds[0]!}
                 onChange={setKind}
               />
-              <span className="mt-1 text-[13px] font-extrabold text-ink">مدت اعتبار</span>
+              <span className="micro mt-2 text-[9px]">Duration</span>
               <div role="radiogroup" aria-label="مدت اعتبار" className="flex gap-2">
                 {durations.map((d) => {
                   const on = d === days;
@@ -266,18 +269,17 @@ export function Shop() {
                       role="radio"
                       aria-checked={on}
                       onClick={() => setDays(d)}
-                      className={`flex h-[66px] flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded-2xl ${
-                        on ? "bg-action text-on-action" : "border border-chip-border bg-chip text-ink"
+                      className={`flex h-11 flex-1 basis-0 items-center justify-center gap-1 whitespace-nowrap rounded-full text-sm ${
+                        on ? "bg-white font-extrabold text-navy" : "glass-milk font-bold"
                       }`}
                     >
-                      <span className="text-xl font-extrabold">{durationLabel(d).split(" ")[0]}</span>
-                      <span className="text-[11px] font-semibold opacity-75">{durationLabel(d).split(" ")[1]}</span>
+                      {durationLabel(d)}
                     </button>
                   );
                 })}
               </div>
-              <div className="mt-1 flex items-center justify-between">
-                <span className="text-[13px] font-extrabold text-ink">حجم (گیگابایت)</span>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="micro text-[9px]">Volume · GB</span>
                 {!custom && plan?.compareAtPrice && plan.compareAtPrice > plan.price && (
                   <Badge tone="ok">٪{faDigits(Math.round((1 - plan.price / plan.compareAtPrice) * 100))} تخفیف</Badge>
                 )}
@@ -295,12 +297,12 @@ export function Shop() {
                         setCustom(false);
                         setPlanId(p.planId);
                       }}
-                      className={`flex h-14 flex-col items-center justify-center rounded-[13px] text-ink ${
-                        on ? "border-2 border-link bg-soft" : "border border-chip-border bg-chip"
+                      className={`flex h-14 flex-col items-center justify-center rounded-full ${
+                        on ? "bg-white text-navy" : "glass-milk"
                       }`}
                     >
                       <span className="font-num text-base font-bold">{p.quotaGib === null ? "∞" : p.quotaGib}</span>
-                      <span className="text-[10px] text-ink-2">{toman(p.price)}</span>
+                      <span className={`text-[10px] ${on ? "text-navy/70" : "text-ink-2"}`}>{toman(p.price)}</span>
                     </button>
                   );
                 })}
@@ -310,12 +312,12 @@ export function Shop() {
                     role="radio"
                     aria-checked={custom}
                     onClick={() => setCustom(true)}
-                    className={`flex h-14 flex-col items-center justify-center rounded-[13px] text-ink ${
-                      custom ? "border-2 border-link bg-soft" : "border border-dashed border-chip-border bg-chip"
+                    className={`flex h-14 flex-col items-center justify-center rounded-full ${
+                      custom ? "bg-white text-navy" : "border border-dashed border-white/40"
                     }`}
                   >
                     <span className="text-sm font-bold">دلخواه</span>
-                    <span className="text-[10px] text-ink-2">هر حجمی</span>
+                    <span className={`text-[10px] ${custom ? "text-navy/70" : "text-ink-2"}`}>هر حجمی</span>
                   </button>
                 )}
               </div>
@@ -372,19 +374,21 @@ export function Shop() {
               )}
             </>
           )}
-        </Card>
+        </div>
 
-        <div className="flex w-[380px] shrink-0 flex-col gap-4 overflow-y-auto">
+        <div className="flex w-[340px] shrink-0 flex-col gap-4 overflow-y-auto">
           {started ? (
             <PaymentResult start={started} amount={quote?.total ?? null} onDone={finish} onClose={() => setStarted(null)} />
           ) : (
             <>
               {data?.trial?.available && !trialNote && (
-                <div className="glass-clear flex items-center gap-3 rounded-[20px] py-3 pe-3 ps-4">
-                  <Icon name="gift" size={22} />
+                <div className="glass-milk flex items-center gap-3 rounded-[26px] py-3.5 pe-3.5 ps-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-navy">
+                    <Icon name="gift" size={20} />
+                  </span>
                   <span className="flex flex-1 flex-col">
                     <span className="text-sm font-extrabold">تست رایگان</span>
-                    <span className="text-xs opacity-90">
+                    <span className="text-[11px] text-ink-2">
                       {faDigits(data.trial.trafficMib)} مگابایت · {faDigits(data.trial.durationDays)} روز · یک بار برای هر حساب
                     </span>
                   </span>
@@ -394,14 +398,14 @@ export function Shop() {
                 </div>
               )}
               {trialNote && (
-                <div role="status" className="glass-clear rounded-[20px] px-4 py-3 text-[13px]">
+                <div role="status" className="glass-milk rounded-[26px] px-4 py-3 text-[13px]">
                   {trialNote}
                 </div>
               )}
               <PendingList pending={data?.pending ?? []} onChanged={load} />
-              <Card>
-                <CardTitle title="روش پرداخت" />
-                <div role="radiogroup" aria-label="روش پرداخت" className="flex flex-col gap-2">
+              <Card className="flex-1">
+                <span className="micro text-[9px]">Payment</span>
+                <div role="radiogroup" aria-label="روش پرداخت" className="flex flex-col border-t border-hair">
                   {methods.map((m) => {
                     const on = m.key === method;
                     const sub =
@@ -422,45 +426,42 @@ export function Shop() {
                           setMethod(m.key);
                           setMethodChosen(true);
                         }}
-                        className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-start ${
-                          on ? "border-2 border-link bg-soft" : "border border-chip-border bg-chip"
-                        }`}
+                        className="flex items-center gap-3 border-b border-hair py-3 text-start hover:bg-white/5"
                       >
-                        <span className={`h-[18px] w-[18px] shrink-0 rounded-full border-2 ${on ? "border-[5px] border-action" : "border-check"}`} />
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-soft text-link">
-                          <Icon name={m.key === "wallet" ? "wallet" : METHOD_ICON[m.key] ?? "globe"} size={18} />
+                        <span className={`box-border flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[1.5px] ${on ? "border-white" : "border-white/35"}`}>
+                          {on && <span className="h-2.5 w-2.5 rounded-full bg-white" />}
                         </span>
-                        <span className="flex flex-1 flex-col">
-                          <span className="text-sm font-extrabold text-ink">{m.labelFa}</span>
-                          <span className="text-xs text-ink-2">{sub}</span>
+                        <span className="flex flex-1 flex-col gap-0.5">
+                          <span className="text-sm font-bold">{m.labelFa}</span>
+                          <span className="text-[11px] text-ink-2">{sub}</span>
                         </span>
+                        <Icon name={m.key === "wallet" ? "wallet" : METHOD_ICON[m.key] ?? "globe"} size={17} color="rgba(255,255,255,0.72)" />
                       </button>
                     );
                   })}
                 </div>
                 {shortOfWallet && <span className="text-xs text-warn">موجودی کیف پول کافی نیست؛ روش دیگری را انتخاب کن یا کیف پول را شارژ کن.</span>}
-              </Card>
-              {error && (
-                <div role="alert" className="rounded-2xl bg-bad-soft px-3.5 py-2.5 text-[13px] text-bad">
-                  {error}
-                </div>
-              )}
-              <section className="mt-auto flex items-center gap-3 rounded-3xl bg-pay-bar p-4 text-white shadow-[0_14px_30px_rgba(2,24,56,0.35)]">
-                <span className="flex flex-1 flex-col gap-0.5">
-                  {strike !== null && strike > total && <span className="text-[11px] line-through opacity-70">{toman(strike)} تومان</span>}
-                  <span className="text-[19px] font-extrabold">{quote ? `${toman(quote.total)} تومان` : plan ? "در حال قیمت‌گیری…" : "—"}</span>
-                  <span className="text-[11px] text-logo">{summary}</span>
+                {error && (
+                  <span role="alert" className="text-[13px] text-bad">
+                    {error}
+                  </span>
+                )}
+                <div className="flex-1" />
+                <span className="text-[11px] text-ink-2">{summary}</span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-[22px] font-extrabold">{quote ? `${toman(quote.total)} تومان` : plan ? "در حال قیمت‌گیری…" : "—"}</span>
+                  {strike !== null && strike > total && <span className="text-xs text-ink-2 line-through">{toman(strike)}</span>}
                 </span>
                 <button
                   type="button"
                   disabled={!quote || busy || shortOfWallet}
                   onClick={() => void pay()}
-                  className="flex h-[52px] items-center gap-2 rounded-[15px] bg-logo px-5 text-[15px] font-extrabold text-[#062845] disabled:opacity-50"
+                  className="flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-full bg-white text-[15px] font-extrabold text-navy shadow-[0_14px_30px_rgba(0,4,30,0.45)] disabled:opacity-50"
                 >
-                  <Icon name="lock" size={18} />
                   {busy ? "…" : "پرداخت"}
+                  <Icon name="lock" size={17} />
                 </button>
-              </section>
+              </Card>
             </>
           )}
         </div>

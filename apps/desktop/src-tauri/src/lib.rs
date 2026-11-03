@@ -158,6 +158,8 @@ pub fn run() {
             auth::login_cancel,
             auth::login_password,
             auth::logout,
+            auth::qr_code,
+            auth::qr_save,
             servers::servers_state,
             servers::servers_refresh,
             servers::servers_add,

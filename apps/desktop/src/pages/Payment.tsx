@@ -6,7 +6,7 @@ import { Icon } from "../design-system/Icon";
 import { errorText } from "../lib/auth";
 import { shop, toman, type PaymentStart, type PaymentView } from "../lib/account";
 
-export const field = "h-11 rounded-[13px] border border-chip-border bg-chip px-3 text-[13px] text-ink outline-none focus:border-link";
+export const field = "h-[46px] rounded-full border border-white/25 bg-white/7 px-4 text-[13px] text-ink outline-none focus:border-white/60";
 
 /** Card numbers in groups of four, left to right, as printed on the card. */
 function cardGroups(n: string): string {
@@ -16,7 +16,7 @@ function cardGroups(n: string): string {
 function CopyLine({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-center gap-2 rounded-[14px] bg-soft-button px-3 py-2">
+    <div className="flex items-center gap-2 rounded-[18px] bg-soft-button px-3 py-2">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-[11px] text-ink-2">{label}</span>
         <span dir="ltr" className={`truncate text-right text-[15px] font-bold text-ink ${mono ? "font-num" : ""}`}>
@@ -26,7 +26,7 @@ function CopyLine({ label, value, mono = true }: { label: string; value: string;
       <button
         type="button"
         onClick={() => void writeText(value.replace(/ /g, "")).then(() => setCopied(true))}
-        className="flex h-9 items-center gap-1.5 rounded-xl bg-soft px-3 text-xs font-bold text-link"
+        className="flex h-9 items-center gap-1.5 rounded-full bg-soft px-3 text-xs font-bold text-link"
       >
         <Icon name={copied ? "check" : "copy"} size={16} />
         {copied ? "کپی شد" : "کپی"}
@@ -69,7 +69,7 @@ export function ReceiptButton({ paymentId, onSent }: { paymentId: string; onSent
 
 function Note({ tone = "link", children }: { tone?: "link" | "ok" | "warn"; children: ReactNode }) {
   const cls = tone === "ok" ? "bg-ok-soft text-ok" : tone === "warn" ? "bg-warn-soft text-warn" : "bg-soft text-ink-2";
-  return <div className={`rounded-[14px] px-3 py-2.5 text-xs leading-[1.9] ${cls}`}>{children}</div>;
+  return <div className={`rounded-[18px] px-3 py-2.5 text-xs leading-[1.9] ${cls}`}>{children}</div>;
 }
 
 /**
@@ -131,7 +131,7 @@ export function PaymentResult({
       body = (
         <>
           {start.url && <Note>صفحه‌ی پرداخت در مرورگر باز شد. بعد از پرداخت به برنامه برگرد.</Note>}
-          {start.bodyFa && <div className="whitespace-pre-line rounded-[14px] bg-soft-button p-3 text-[13px] leading-[1.9] text-ink">{start.bodyFa}</div>}
+          {start.bodyFa && <div className="whitespace-pre-line rounded-[18px] bg-soft-button p-3 text-[13px] leading-[1.9] text-ink">{start.bodyFa}</div>}
           <div className="flex gap-2">
             {start.url && (
               <Button kind="soft" icon="link" onClick={() => void shop.openGateway().catch((e) => setError(errorText(e)))}>
@@ -183,15 +183,15 @@ export function PaymentResult({
   }
 
   return (
-    <section aria-label="پرداخت" className="glass-milk flex flex-col gap-3 rounded-3xl p-4">
+    <section aria-label="پرداخت" className="glass-milk flex flex-col gap-3 rounded-[26px] p-4">
       <div className="flex items-center gap-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-soft text-link">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-soft text-link">
           <Icon name={start.kind === "done" ? "check" : "lock"} size={18} />
         </span>
         <span className="flex-1 text-base font-extrabold text-ink">
           {start.kind === "done" ? "خرید انجام شد" : start.kind === "card" ? "کارت به کارت" : start.kind === "gateway" ? "درگاه پرداخت" : "پرداخت با ارز دیجیتال"}
         </span>
-        <button type="button" aria-label="بستن" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-muted hover:bg-soft">
+        <button type="button" aria-label="بستن" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-soft">
           <Icon name="x" size={18} />
         </button>
       </div>
@@ -215,13 +215,13 @@ export function PendingList({ pending, onChanged }: { pending: PaymentView[]; on
   const [open, setOpen] = useState<string | null>(null);
   if (!pending.length) return null;
   return (
-    <section className="glass-milk flex flex-col gap-1.5 rounded-3xl p-3.5">
+    <section className="glass-milk flex flex-col gap-1.5 rounded-[26px] p-3.5">
       <span className="px-1 text-sm font-extrabold text-ink">پرداخت‌های در جریان</span>
       {pending.map((p) => {
         const needsReceipt = p.card !== null && p.state === "awaiting_proof";
         const expanded = open === p.paymentId;
         return (
-          <div key={p.paymentId} className="flex flex-col gap-2 rounded-2xl bg-soft-button px-3 py-2.5">
+          <div key={p.paymentId} className="flex flex-col gap-2 rounded-[18px] bg-soft-button px-3 py-2.5">
             <div className="flex items-center gap-2">
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="whitespace-nowrap text-[13px] font-bold text-ink">{toman(p.amount)} تومان</span>
@@ -232,7 +232,7 @@ export function PendingList({ pending, onChanged }: { pending: PaymentView[]; on
                   type="button"
                   aria-expanded={expanded}
                   onClick={() => setOpen(expanded ? null : p.paymentId)}
-                  className="h-8 whitespace-nowrap rounded-[10px] bg-soft px-3 text-xs font-bold text-link"
+                  className="h-8 whitespace-nowrap rounded-full bg-soft px-3 text-xs font-bold text-link"
                 >
                   {expanded ? "بستن" : "کارت و رسید"}
                 </button>
