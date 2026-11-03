@@ -136,7 +136,7 @@ function SharePanel({ s, onRotated }: { s: Account | null; onRotated: () => Prom
     }
   };
   return (
-    <section className="glass-milk flex w-[300px] shrink-0 flex-col gap-3 self-start rounded-[30px] p-5">
+    <section className="glass-milk flex w-[300px] shrink-0 flex-col gap-3 self-start rounded-[30px] p-5 max-[1250px]:w-[260px]">
       <span className="micro text-[9px]">Link &amp; QR</span>
       <span className="text-lg font-extrabold">{s ? s.name : "لینک اشتراک"}</span>
       {url ? (

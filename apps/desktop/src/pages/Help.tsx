@@ -22,7 +22,7 @@ function Status() {
     bot.servers().then(setRows, (e) => setError(errorText(e)));
   }, []);
   return (
-    <Card className="w-[330px] shrink-0 self-start">
+    <Card className="w-[330px] shrink-0 self-start max-[1250px]:w-[270px]">
       <span className="micro text-[9px]">Server status</span>
       <span className="text-[17px] font-extrabold">وضعیت سرورها</span>
       {error && <span className="text-xs text-bad">{error}</span>}

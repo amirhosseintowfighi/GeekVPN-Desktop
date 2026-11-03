@@ -29,6 +29,7 @@ pub struct ServersView {
     sources: Vec<Source>,
     servers: Vec<ServerView>,
     selected: Option<String>,
+    active_source: Option<String>,
     auto_select: bool,
     route: Route,
     sort_by_ping: bool,
@@ -50,6 +51,7 @@ fn view(store: &Store) -> ServersView {
         sources: store.data.sources.clone(),
         servers: store.servers(),
         selected: store.data.selected.clone(),
+        active_source: store.active_source().map(|s| s.id.clone()),
         auto_select: store.data.auto_select,
         route: store.data.route,
         sort_by_ping: store.data.sort_by_ping,
@@ -249,6 +251,7 @@ pub async fn servers_remove_source(app: AppHandle, state: State<'_, ServersState
 pub struct Settings {
     favorite: Option<(String, bool)>,
     selected: Option<String>,
+    active_source: Option<String>,
     auto_select: Option<bool>,
     route: Option<Route>,
     sort_by_ping: Option<bool>,
@@ -286,6 +289,7 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
     let Settings {
         favorite,
         selected,
+        active_source,
         auto_select,
         route,
         sort_by_ping,
@@ -310,7 +314,19 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
                 store.data.favorites.remove(&id);
             }
         }
+        if let Some(id) = active_source {
+            // Another subscription: a server picked by hand in the old one
+            // no longer applies, so «خودکار» takes over until one is picked.
+            let still_there = store.data.selected.as_deref().and_then(|sel| store.find_view(sel)).is_some_and(|v| v.source_id == id);
+            store.data.active_source = Some(id);
+            if !still_there {
+                store.data.auto_select = true;
+            }
+        }
         if let Some(id) = selected {
+            if let Some(v) = store.find_view(&id) {
+                store.data.active_source = Some(v.source_id);
+            }
             store.data.selected = Some(id);
             // Picking a server by hand is turning «خودکار» off, as on Android.
             store.data.auto_select = false;
@@ -376,7 +392,7 @@ pub async fn servers_test(app: AppHandle, state: State<'_, ServersState>) -> Res
     let now = now() * 1000;
     let (views, scannable, ips) = {
         let store = state.store.lock().await;
-        let views = store.servers();
+        let views = store.pool();
         let scannable: Vec<ServerView> = views
             .iter()
             .filter(|v| {
@@ -479,7 +495,7 @@ pub async fn connect(app: &AppHandle) -> Result<(), String> {
         // Smart connect: a CDN-fronted service with no fresh clean addresses
         // on this network gets a short scan first.
         let scannable: Vec<ServerView> = store
-            .servers()
+            .pool()
             .into_iter()
             .filter(|v| store.scan_target(v).is_some_and(|t| store.data.scan.verdicts.get(&t.verdict_key()).is_some_and(|d| d.behind)))
             .collect();
@@ -505,7 +521,7 @@ pub async fn connect(app: &AppHandle) -> Result<(), String> {
                 if fast.is_empty() {
                     // Nothing answered the test: try the list as it stands,
                     // the probe URL itself may be what is blocked.
-                    store.servers()
+                    store.pool()
                 } else {
                     fast
                 }

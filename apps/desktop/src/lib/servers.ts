@@ -67,6 +67,8 @@ export interface ServersView {
   sources: Source[];
   servers: ServerView[];
   selected: string | null;
+  /** The subscription (or link) whose servers are listed and used. */
+  activeSource: string | null;
   autoSelect: boolean;
   route: Route;
   sortByPing: boolean;
@@ -113,6 +115,7 @@ export interface TunnelStats {
 export interface ServerSettings {
   favorite?: [string, boolean];
   selected?: string;
+  activeSource?: string;
   autoSelect?: boolean;
   route?: Route;
   sortByPing?: boolean;
@@ -133,6 +136,7 @@ const EMPTY: ServersView = {
   sources: [],
   servers: [],
   selected: null,
+  activeSource: null,
   autoSelect: true,
   route: "smart",
   sortByPing: false,

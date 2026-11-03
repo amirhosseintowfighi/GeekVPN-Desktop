@@ -1,28 +1,18 @@
-import { useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router";
+import { NavLink } from "react-router";
 import { Icon } from "../design-system/Icon";
 import { Lockup } from "../design-system/Logo";
-import { toman, wallet } from "../lib/account";
+import { toman } from "../lib/account";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
 import { NAV } from "../lib/nav";
 import { useUnread } from "../lib/useUnread";
+import { useWalletBalance } from "../lib/useWallet";
 
 /** The customer at the foot of the rail: name and wallet balance. */
 function Who() {
   const { view } = useAuth();
   const user = view?.user ?? null;
-  const { pathname } = useLocation();
-  const [balance, setBalance] = useState<number | null>(null);
-  useEffect(() => {
-    if (!user) return setBalance(null);
-    let alive = true;
-    // Re-read when the page changes: a purchase or top-up moves it.
-    wallet.load().then((w) => alive && setBalance(w.balance), () => {});
-    return () => {
-      alive = false;
-    };
-  }, [user, pathname]);
+  const balance = useWalletBalance();
   return (
     <div className="flex flex-col gap-0.5 px-2.5 pt-3">
       <span className="truncate text-[13px] font-bold">{user ? user.displayName || `کاربر ${faDigits(user.telegramId)}` : "مهمان"}</span>

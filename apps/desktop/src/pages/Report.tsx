@@ -105,7 +105,7 @@ export function Report() {
           </>
         )}
       </div>
-      <Card className="w-[330px] shrink-0">
+      <Card className="w-[330px] shrink-0 max-[1250px]:w-[270px]">
         <div className="flex items-center justify-between">
           <span className="micro text-[9px]">Technical report</span>
           <button type="button" onClick={() => setShown(!shown)} className="text-xs underline underline-offset-[3px]">

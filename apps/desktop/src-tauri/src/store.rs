@@ -64,6 +64,9 @@ pub struct Persisted {
     pub sources: Vec<Source>,
     pub favorites: HashSet<String>,
     pub selected: Option<String>,
+    /// The subscription (or link) the customer picked: its servers are the
+    /// list, the tests and what «خودکار» chooses from.
+    pub active_source: Option<String>,
     /// «سرور: خودکار»: connect to the fastest answering server.
     pub auto_select: bool,
     pub route: Route,
@@ -158,6 +161,7 @@ impl Default for Persisted {
             sources: Vec::new(),
             favorites: HashSet::new(),
             selected: None,
+            active_source: None,
             auto_select: true,
             route: Route::Smart,
             delays: HashMap::new(),
@@ -260,6 +264,23 @@ impl Store {
         out
     }
 
+    /// The source in use: the one picked, while it still has servers, else
+    /// the first that has any.
+    pub fn active_source(&self) -> Option<&Source> {
+        let usable = |s: &&Source| !s.links.is_empty();
+        self.data
+            .active_source
+            .as_deref()
+            .and_then(|id| self.data.sources.iter().filter(usable).find(|s| s.id == id))
+            .or_else(|| self.data.sources.iter().find(usable))
+    }
+
+    /// The active source's servers, in the same order as `servers`.
+    pub fn pool(&self) -> Vec<ServerView> {
+        let Some(active) = self.active_source().map(|s| s.id.clone()) else { return vec![] };
+        self.servers().into_iter().filter(|v| v.source_id == active).collect()
+    }
+
     /// The server and its source.
     pub fn find_view(&self, id: &str) -> Option<ServerView> {
         self.servers().into_iter().find(|v| v.server.id == id)
@@ -305,11 +326,11 @@ impl Store {
     }
 
 
-    /// Candidates for «سرور: خودکار»: every server that answered its last
-    /// test, fastest first.
+    /// Candidates for «سرور: خودکار»: every server of the active source that
+    /// answered its last test, fastest first.
     pub fn fastest(&self) -> Vec<ServerView> {
         let mut all: Vec<(i64, ServerView)> =
-            self.servers().into_iter().filter_map(|v| v.delay_ms.filter(|ms| *ms > 0).map(|ms| (ms, v))).collect();
+            self.pool().into_iter().filter_map(|v| v.delay_ms.filter(|ms| *ms > 0).map(|ms| (ms, v))).collect();
         all.sort_by_key(|(ms, _)| *ms);
         all.into_iter().map(|(_, v)| v).collect()
     }
@@ -348,6 +369,22 @@ mod tests {
         assert_eq!(s.servers()[0].server.name, "C");
         // Auto-select never picks a server that did not answer.
         assert_eq!(s.fastest().iter().map(|x| x.server.name.as_str()).collect::<Vec<_>>(), ["B", "A"]);
+    }
+
+    #[test]
+    fn only_the_active_source_is_used() {
+        let mut s = store_with(&[A, B]);
+        s.data.sources.push(Source { id: "x".into(), name: "other".into(), kind: SourceKind::Manual, url: None, links: vec![C.into()], updated_at: None });
+        let id = |l: &str| Server::parse(l).unwrap().id;
+        s.data.delays = HashMap::from([(id(A), 300), (id(B), 200), (id(C), 50)]);
+        // Nothing picked: the first source with servers.
+        assert_eq!(s.pool().len(), 2);
+        assert_eq!(s.fastest()[0].server.name, "B");
+        s.data.active_source = Some("x".into());
+        assert_eq!(s.fastest().iter().map(|v| v.server.name.as_str()).collect::<Vec<_>>(), ["C"]);
+        // A source that is gone falls back.
+        s.data.active_source = Some("gone".into());
+        assert_eq!(s.pool().len(), 2);
     }
 
     #[test]
