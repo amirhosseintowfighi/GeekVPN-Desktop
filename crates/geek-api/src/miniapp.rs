@@ -12,7 +12,8 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::client::{send_session, ApiClient};
+use crate::client::{send_public, send_session, ApiClient};
+use crate::types::SubscriptionCard;
 use crate::error::ApiError;
 
 // -- shop ---------------------------------------------------------------------
@@ -465,6 +466,97 @@ fn id(value: &str) -> Result<&str, ApiError> {
     }
 }
 
+// -- what the bot offers besides the shop (renewal, profile, alerts, help) ----
+
+/// «تمدید خودکار از کیف پول» for one service (the bot's renewal screen).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoRenew {
+    pub enabled: bool,
+    /// Only the platform's own services with a plan behind them can.
+    pub available: bool,
+    #[serde(default)]
+    pub last_result: Option<String>,
+    #[serde(default)]
+    pub last_attempt_at: Option<DateTime<Utc>>,
+}
+
+/// The bot's profile screen. Served snake_case (a plain dataclass).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct Profile {
+    pub telegram_id: i64,
+    #[serde(default)]
+    pub referral_code: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub joined_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub order_count: i64,
+    #[serde(default)]
+    pub lifetime_spend: i64,
+    #[serde(default)]
+    pub tier: Option<String>,
+}
+
+/// The bot's notification switches («تنظیمات اعلان»), snake_case on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Preferences {
+    pub expiry: bool,
+    pub traffic: bool,
+    pub promos: bool,
+    pub news: bool,
+    pub quiet_hours: bool,
+}
+
+/// One row of «وضعیت سرورها».
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct ServerStatus {
+    pub name_fa: String,
+    /// healthy | degraded | down | maintenance
+    pub health: String,
+    #[serde(default)]
+    pub location_fa: Option<String>,
+    #[serde(default)]
+    pub load_percent: Option<i64>,
+    #[serde(default)]
+    pub flag: Option<String>,
+}
+
+/// «سوالات متداول», the same copy the bot shows.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct FaqSection {
+    pub key: String,
+    pub title_fa: String,
+    pub entries: Vec<FaqEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct FaqEntry {
+    pub key: String,
+    pub question_fa: String,
+    pub answer_fa: String,
+}
+
+/// The operator's offer banner (admin settings `app.promo_*`).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Promo {
+    pub title_fa: String,
+    pub body_fa: String,
+    #[serde(default)]
+    pub coupon_code: Option<String>,
+    #[serde(default)]
+    pub until: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+struct PromoResponse {
+    promo: Option<Promo>,
+}
+
 impl ApiClient {
     pub async fn storefront(&self, token: &str) -> Result<Storefront, ApiError> {
         self.get_json("api/miniapp/storefront", token).await
@@ -621,6 +713,59 @@ impl ApiClient {
         self.get_json("api/miniapp/referral", token).await
     }
 
+    pub async fn auto_renew(&self, token: &str, subscription_id: &str) -> Result<AutoRenew, ApiError> {
+        self.get_json(&format!("api/miniapp/subscriptions/{}/auto-renew", id(subscription_id)?), token).await
+    }
+
+    pub async fn set_auto_renew(&self, token: &str, subscription_id: &str, enabled: bool) -> Result<AutoRenew, ApiError> {
+        let req = self
+            .request(Method::PUT, &format!("api/miniapp/subscriptions/{}/auto-renew", id(subscription_id)?))?
+            .bearer_auth(token)
+            .json(&serde_json::json!({ "enabled": enabled }));
+        send_session(req).await
+    }
+
+    /// «لینک جدید»: new credentials; the old link stops working. 409 with a
+    /// Persian message when this service's panel cannot do it.
+    pub async fn rotate_link(&self, token: &str, subscription_id: &str) -> Result<SubscriptionCard, ApiError> {
+        self.post_json(&format!("api/miniapp/subscriptions/{}/rotate", id(subscription_id)?), token, &serde_json::json!({}))
+            .await
+    }
+
+    pub async fn profile(&self, token: &str) -> Result<Profile, ApiError> {
+        self.get_json("api/miniapp/profile", token).await
+    }
+
+    pub async fn set_display_name(&self, token: &str, name: &str) -> Result<Profile, ApiError> {
+        self.post_json("api/miniapp/profile", token, &serde_json::json!({ "displayName": name })).await
+    }
+
+    pub async fn preferences(&self, token: &str) -> Result<Preferences, ApiError> {
+        self.get_json("api/miniapp/preferences", token).await
+    }
+
+    pub async fn set_preferences(&self, token: &str, prefs: &Preferences) -> Result<Preferences, ApiError> {
+        let body = serde_json::json!({
+            "expiry": prefs.expiry, "traffic": prefs.traffic, "promos": prefs.promos,
+            "news": prefs.news, "quietHours": prefs.quiet_hours,
+        });
+        self.post_json("api/miniapp/preferences", token, &body).await
+    }
+
+    pub async fn server_status(&self, token: &str) -> Result<Vec<ServerStatus>, ApiError> {
+        self.get_json("api/miniapp/servers", token).await
+    }
+
+    pub async fn faq(&self, token: &str) -> Result<Vec<FaqSection>, ApiError> {
+        self.get_json("api/miniapp/faq", token).await
+    }
+
+    /// Public: a guest sees the offer too.
+    pub async fn promo(&self) -> Result<Option<Promo>, ApiError> {
+        let r: PromoResponse = send_public(self.request(Method::GET, "api/app/promo")?).await?;
+        Ok(r.promo)
+    }
+
     pub async fn usage_days(
         &self,
         token: &str,
@@ -687,5 +832,30 @@ impl ApiClient {
             &Message { message },
         )
         .await
+    }
+}
+
+#[cfg(test)]
+mod bot_feature_shapes {
+    use super::*;
+
+    #[test]
+    fn decodes_what_the_backend_serves() {
+        // ApiModel: camelCase.
+        let a: AutoRenew = serde_json::from_str(r#"{"enabled":true,"available":true,"lastResult":"ok","lastAttemptAt":"2026-11-01T10:00:00Z"}"#).unwrap();
+        assert!(a.enabled && a.available);
+        let p: PromoResponse = serde_json::from_str(r#"{"promo":{"titleFa":"تخفیف","bodyFa":"۲۰٪","couponCode":"OFF20","until":"2026-11-30"}}"#).unwrap();
+        assert_eq!(p.promo.unwrap().coupon_code.as_deref(), Some("OFF20"));
+        let none: PromoResponse = serde_json::from_str(r#"{"promo":null}"#).unwrap();
+        assert!(none.promo.is_none());
+        // Plain dataclasses: snake_case.
+        let pr: Profile = serde_json::from_str(r#"{"user_id":"0b8e…","telegram_id":1011788123,"referral_code":"GEEK42","display_name":"علی","username":null,"phone":null,"joined_at":"2026-01-01T00:00:00Z","order_count":3,"lifetime_spend":540000,"tier":"silver"}"#).unwrap();
+        assert_eq!(pr.display_name.as_deref(), Some("علی"));
+        let pf: Preferences = serde_json::from_str(r#"{"expiry":true,"traffic":false,"promos":true,"news":false,"quiet_hours":true}"#).unwrap();
+        assert!(!pf.traffic && pf.quiet_hours);
+        let s: Vec<ServerStatus> = serde_json::from_str(r#"[{"name_fa":"آلمان","health":"healthy","location_fa":"فرانکفورت","load_percent":41,"flag":"🇩🇪"}]"#).unwrap();
+        assert_eq!(s[0].load_percent, Some(41));
+        let f: Vec<FaqSection> = serde_json::from_str(r#"[{"key":"connect","title_fa":"اتصال","entries":[{"key":"a","question_fa":"؟","answer_fa":"."}]}]"#).unwrap();
+        assert_eq!(f[0].entries.len(), 1);
     }
 }

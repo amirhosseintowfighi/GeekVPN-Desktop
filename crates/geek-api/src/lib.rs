@@ -16,7 +16,7 @@ pub use client::ApiClient;
 pub use error::ApiError;
 pub use login::{telegram_app_link, wait_for_approval, LinkOutcome};
 pub use miniapp::{
-    receipt_type, CardInfo, CouponPreview, PaymentMethod, PaymentStart, PaymentView,
+    receipt_type, AutoRenew, CardInfo, FaqEntry, FaqSection, Preferences, Profile, Promo, ServerStatus, CouponPreview, PaymentMethod, PaymentStart, PaymentView,
     PendingPayment, Purchase, Quote, QuoteLine, Referral, StoreCategory, StorePlan, StoreProduct,
     Storefront, Ticket, TicketMessage, TrialClaim, TrialOffer, UsageDay, Wallet, WalletTransaction,
     WalletTransactions, MAX_RECEIPT_BYTES,

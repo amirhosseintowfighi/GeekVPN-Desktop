@@ -183,10 +183,15 @@ export function Support() {
           title={composing ? "تیکت جدید" : current ? current.topicFa || "تیکت" : "پشتیبانی"}
           subtitle={composing ? "جواب را همین‌جا و در ربات تلگرام می‌گیری" : st ? `${st.label} · هر ۲۰ ثانیه تازه می‌شود` : "هر ۲۰ ثانیه تازه می‌شود"}
           actions={
+            <>
+            <Link to="/help" className="glass-milk flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold text-white no-underline">
+              راهنما و وضعیت سرورها
+            </Link>
             <Link to="/report" className="glass-milk flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold text-white no-underline">
               <Icon name="flag" size={16} />
               گزارش مشکل اتصال
             </Link>
+            </>
           }
         />
         {composing ? (

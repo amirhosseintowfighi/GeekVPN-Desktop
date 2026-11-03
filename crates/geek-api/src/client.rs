@@ -264,6 +264,11 @@ enum Auth {
     Session,
 }
 
+/// A public call (no token): a 401 is an ordinary refusal.
+pub(crate) async fn send_public<T: DeserializeOwned>(req: RequestBuilder) -> Result<T, ApiError> {
+    send(req, Auth::None).await
+}
+
 /// A Bearer call whose 401 means the session is over.
 pub(crate) async fn send_session<T: DeserializeOwned>(req: RequestBuilder) -> Result<T, ApiError> {
     send(req, Auth::Session).await

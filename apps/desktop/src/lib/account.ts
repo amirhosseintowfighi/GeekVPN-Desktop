@@ -340,3 +340,67 @@ export function sizeFa(n: number): { value: string; unit: string } {
   if (n > 0) return { value: fa(n / 1024, 0), unit: "کیلوبایت" };
   return { value: "۰", unit: "مگ" };
 }
+
+// -- what the bot offers besides the shop ----------------------------------
+
+export interface AutoRenew {
+  enabled: boolean;
+  /** Only the platform's own services with a plan behind them. */
+  available: boolean;
+  lastResult: string | null;
+  lastAttemptAt: string | null;
+}
+
+export interface Profile {
+  telegram_id: number;
+  referral_code: string;
+  display_name: string | null;
+  username: string | null;
+  joined_at: string | null;
+  order_count: number;
+  lifetime_spend: number;
+  tier: string | null;
+}
+
+/** The bot's notification switches, snake_case as the backend serves them. */
+export interface Preferences {
+  expiry: boolean;
+  traffic: boolean;
+  promos: boolean;
+  news: boolean;
+  quiet_hours: boolean;
+}
+
+export interface ServerStatus {
+  name_fa: string;
+  health: "healthy" | "degraded" | "down" | "maintenance" | string;
+  location_fa: string | null;
+  load_percent: number | null;
+  flag: string | null;
+}
+
+export interface FaqSection {
+  key: string;
+  title_fa: string;
+  entries: { key: string; question_fa: string; answer_fa: string }[];
+}
+
+export interface Promo {
+  titleFa: string;
+  bodyFa: string;
+  couponCode: string | null;
+  until: string | null;
+}
+
+export const bot = {
+  autoRenew: (subscriptionId: string) => call<AutoRenew>("auto_renew_get", { subscriptionId }),
+  setAutoRenew: (subscriptionId: string, enabled: boolean) => call<AutoRenew>("auto_renew_set", { subscriptionId, enabled }),
+  rotate: (subscriptionId: string) => call<void>("link_rotate", { subscriptionId }),
+  profile: () => call<Profile>("profile_load"),
+  rename: (name: string) => call<Profile>("profile_rename", { name }),
+  prefs: () => call<Preferences>("prefs_load"),
+  savePrefs: (prefs: Preferences) => call<Preferences>("prefs_save", { prefs }),
+  servers: () => call<ServerStatus[]>("server_status"),
+  faq: () => call<FaqSection[]>("faq_load"),
+  promo: () => call<Promo | null>("promo_load"),
+};

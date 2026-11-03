@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Badge, Button } from "../design-system/controls";
+import { Badge, Button, Switch } from "../design-system/controls";
 import { Icon } from "../design-system/Icon";
 import { Card, EmptyState, Group, PageHeader, Row } from "../design-system/layout";
-import { referral, shop, support, toman, wallet, type PaymentMethod, type PaymentStart, type ReferralView, type Wallet, type WalletTransactions } from "../lib/account";
+import { bot, referral, shop, support, toman, wallet, type Preferences, type Profile, type PaymentMethod, type PaymentStart, type ReferralView, type Wallet, type WalletTransactions } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
@@ -139,6 +139,100 @@ function Transactions() {
   );
 }
 
+const PREFS: readonly [keyof Preferences, string, string][] = [
+  ["expiry", "یادآوری انقضا", "چند روز قبل از تمام شدن زمان سرویس"],
+  ["traffic", "هشدار اتمام حجم", "وقتی بیشتر حجم سرویس مصرف شد"],
+  ["promos", "اطلاع از تخفیف‌ها", "کد تخفیف و پیشنهادهای ویژه"],
+  ["news", "اخبار و به‌روزرسانی‌ها", "خبرهای سرویس و نسخه‌های تازه"],
+  ["quiet_hours", "ساعات سکوت شبانه", "پیام‌های غیرضروری شب‌ها فرستاده نمی‌شوند"],
+];
+
+/** The bot's «تنظیمات اعلان»: what the bot sends to Telegram. */
+function Notifications() {
+  const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    bot.prefs().then(setPrefs, (e) => setError(errorText(e)));
+  }, []);
+  const flip = (key: keyof Preferences, on: boolean) => {
+    if (!prefs) return;
+    const next = { ...prefs, [key]: on };
+    setPrefs(next);
+    setError(null);
+    bot.savePrefs(next).then(setPrefs, (e) => {
+      setPrefs(prefs);
+      setError(errorText(e));
+    });
+  };
+  return (
+    <Group micro="Telegram notifications">
+      {PREFS.map(([key, title, hint]) => (
+        <Row
+          key={key}
+          title={title}
+          hint={hint}
+          trailing={<Switch label={title} checked={prefs?.[key] ?? false} onChange={(v) => prefs && flip(key, v)} />}
+        />
+      ))}
+      {error && <span role="alert" className="py-2 text-xs text-bad">{error}</span>}
+    </Group>
+  );
+}
+
+/** «نام نمایشی»: the name the bot and support see. */
+function NameRow({ profile, onSaved }: { profile: Profile | null; onSaved: (p: Profile) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await bot.rename(name));
+      setEditing(false);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-2 border-b border-hair py-2.5">
+        <div className="flex items-center gap-2">
+          <input
+            aria-label="نام نمایشی"
+            value={name}
+            maxLength={64}
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && name.trim() && void save()}
+            className={`${field} h-10 min-w-0 flex-1`}
+          />
+          <Button height={38} disabled={busy || !name.trim()} onClick={() => void save()}>
+            ذخیره
+          </Button>
+          <Button kind="soft" height={38} onClick={() => setEditing(false)}>
+            انصراف
+          </Button>
+        </div>
+        {error && <span role="alert" className="text-xs text-bad">{error}</span>}
+      </div>
+    );
+  }
+  return (
+    <Row
+      title="نام نمایشی"
+      hint={profile?.display_name || "تنظیم نشده"}
+      onClick={() => {
+        setName(profile?.display_name ?? "");
+        setEditing(true);
+      }}
+    />
+  );
+}
+
 /** Desktop-Account: profile, wallet, referral, and the ways to support. */
 export function Account() {
   const { view, signOut, showSignIn } = useAuth();
@@ -151,12 +245,14 @@ export function Account() {
   const [money, setMoney] = useState<Wallet | null>(null);
   const [ref, setRef] = useState<ReferralView | null>(null);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [panel, setPanel] = useState<"none" | "topup" | "history">("none");
   const user = view?.user;
 
   const load = useCallback(() => {
     wallet.load().then(setMoney, (e) => setError(errorText(e)));
     referral.load().then(setRef, () => {});
+    bot.profile().then(setProfile, () => {});
     shop.load().then((s) => setMethods(s.methods), () => {});
   }, []);
   useEffect(() => {
@@ -284,6 +380,7 @@ export function Account() {
                 </span>
               }
             />
+            <Row icon="chat" title="راهنما و وضعیت سرورها" hint="سوالات متداول ربات و سلامت سرورها" onClick={() => navigate("/help")} />
             <Row icon="flag" title="گزارش مشکل" hint="یک گزارش فنی برای پشتیبانی می‌فرستد" onClick={() => navigate("/report")} />
             <Row icon="plane" title="ربات پشتیبانی" hint="گفتگو در تلگرام" onClick={() => void support.openBot().catch((e) => setError(errorText(e)))} />
           </Group>
@@ -303,9 +400,16 @@ export function Account() {
               }
             />
           </Group>
-          <Group micro="Telegram">
-            <Row icon="gift" title="کد معرف" hint={<span dir="ltr" className="font-num">{user.referralCode}</span>} trailing={<span />} />
+          <Group micro="Profile">
+            <NameRow profile={profile} onSaved={setProfile} />
+            <Row
+              title="عضویت"
+              hint={profile?.joined_at ? `از ${new Date(profile.joined_at).toLocaleDateString("fa-IR", { dateStyle: "medium" })} · ${faDigits(profile.order_count)} خرید` : "…"}
+              trailing={<span />}
+            />
+            <Row title="کد معرف" hint={<span dir="ltr" className="font-num">{user.referralCode}</span>} trailing={<span />} />
           </Group>
+          <Notifications />
         </div>
         </div>
       </div>

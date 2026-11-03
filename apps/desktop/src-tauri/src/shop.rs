@@ -357,3 +357,84 @@ mod tests {
         assert!(!super::safe_url("file:///etc/passwd") && !super::safe_url("tg://resolve"));
     }
 }
+
+// -- what the bot offers besides the shop ----------------------------------
+
+#[tauri::command]
+pub async fn auto_renew_get(app: AppHandle, auth: State<'_, AuthState>, subscription_id: String) -> Result<geek_api::AutoRenew, String> {
+    call(&app, &auth, |api, t| {
+        let id = subscription_id.clone();
+        async move { api.auto_renew(&t, &id).await }
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn auto_renew_set(app: AppHandle, auth: State<'_, AuthState>, subscription_id: String, enabled: bool) -> Result<geek_api::AutoRenew, String> {
+    call(&app, &auth, |api, t| {
+        let id = subscription_id.clone();
+        async move { api.set_auto_renew(&t, &id, enabled).await }
+    })
+    .await
+}
+
+/// «لینک جدید»: the panel issues new credentials; the caller then refreshes
+/// the servers so the new link is what connects.
+#[tauri::command]
+pub async fn link_rotate(app: AppHandle, auth: State<'_, AuthState>, subscription_id: String) -> Result<(), String> {
+    call(&app, &auth, |api, t| {
+        let id = subscription_id.clone();
+        async move { api.rotate_link(&t, &id).await }
+    })
+    .await
+    .map(|_| ())
+}
+
+#[tauri::command]
+pub async fn profile_load(app: AppHandle, auth: State<'_, AuthState>) -> Result<geek_api::Profile, String> {
+    call(&app, &auth, |api, t| async move { api.profile(&t).await }).await
+}
+
+/// «تغییر نام نمایشی», then the signed-in user is re-read so the sidebar
+/// and Account show the new name.
+#[tauri::command]
+pub async fn profile_rename(app: AppHandle, auth: State<'_, AuthState>, name: String) -> Result<geek_api::Profile, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() || name.chars().count() > 64 {
+        return Err("نام باید بین ۱ تا ۶۴ حرف باشد.".into());
+    }
+    let p = call(&app, &auth, |api, t| {
+        let n = name.clone();
+        async move { api.set_display_name(&t, &n).await }
+    })
+    .await?;
+    let _ = auth.session.refresh_user().await;
+    crate::auth::emit_changed(&app, &auth.session).await;
+    Ok(p)
+}
+
+#[tauri::command]
+pub async fn prefs_load(app: AppHandle, auth: State<'_, AuthState>) -> Result<geek_api::Preferences, String> {
+    call(&app, &auth, |api, t| async move { api.preferences(&t).await }).await
+}
+
+#[tauri::command]
+pub async fn prefs_save(app: AppHandle, auth: State<'_, AuthState>, prefs: geek_api::Preferences) -> Result<geek_api::Preferences, String> {
+    call(&app, &auth, |api, t| async move { api.set_preferences(&t, &prefs).await }).await
+}
+
+#[tauri::command]
+pub async fn server_status(app: AppHandle, auth: State<'_, AuthState>) -> Result<Vec<geek_api::ServerStatus>, String> {
+    call(&app, &auth, |api, t| async move { api.server_status(&t).await }).await
+}
+
+#[tauri::command]
+pub async fn faq_load(app: AppHandle, auth: State<'_, AuthState>) -> Result<Vec<geek_api::FaqSection>, String> {
+    call(&app, &auth, |api, t| async move { api.faq(&t).await }).await
+}
+
+/// The operator's offer banner; none when the backend can't be reached.
+#[tauri::command]
+pub async fn promo_load(auth: State<'_, AuthState>) -> Result<Option<geek_api::Promo>, String> {
+    Ok(auth.session.api().promo().await.unwrap_or(None))
+}
