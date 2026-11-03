@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Badge, Button, Segmented } from "../design-system/controls";
 import { Icon, type IconName } from "../design-system/Icon";
 import { Card, EmptyState, PageHeader } from "../design-system/layout";
-import { customVolume, durationLabel, planGrid, shop, termGib, toman, type CouponPreview, type PaymentStart, type Quote, type ShopView } from "../lib/account";
+import { bot, customVolume, durationLabel, planGrid, shop, termGib, toman, type CouponPreview, type PaymentStart, type Promo, type Quote, type ShopView } from "../lib/account";
 import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
@@ -55,6 +55,11 @@ export function Shop() {
   const [custom, setCustom] = useState(false);
   const [customText, setCustomText] = useState("");
   const [couponText, setCouponText] = useState("");
+  // The operator's offer (admin «app.promo_*»), the same banner the Android app shows.
+  const [promo, setPromo] = useState<Promo | null>(null);
+  useEffect(() => {
+    bot.promo().then(setPromo, () => setPromo(null));
+  }, []);
   const [coupon, setCoupon] = useState<CouponPreview | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [method, setMethod] = useState("wallet");
@@ -223,6 +228,29 @@ export function Shop() {
           <Link to="/shop" className="text-xs text-white/90">
             خرید سرویس جدید
           </Link>
+        </div>
+      )}
+      {promo && (
+        <div className="glass-milk flex items-center gap-3 rounded-[22px] px-4 py-3">
+          <Icon name="gift" size={20} />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-sm font-extrabold">{promo.titleFa}</span>
+            <span className="text-xs leading-[1.7] text-ink-2">
+              {promo.bodyFa}
+              {promo.until ? ` · تا ${new Date(`${promo.until}T12:00:00`).toLocaleDateString("fa-IR", { month: "long", day: "numeric" })}` : ""}
+            </span>
+          </span>
+          {promo.couponCode && (
+            <Button
+              height={36}
+              onClick={() => {
+                setCouponText(promo.couponCode ?? "");
+                setCoupon(null);
+              }}
+            >
+              <span dir="ltr" className="font-num">{promo.couponCode}</span>
+            </Button>
+          )}
         </div>
       )}
       {paid && PAYMENT_RESULT[paid] && (

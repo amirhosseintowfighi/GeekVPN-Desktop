@@ -15,6 +15,7 @@ const Shop = lazy(() => import("./pages/Shop").then((m) => ({ default: m.Shop })
 const Connections = lazy(() => import("./pages/Connections").then((m) => ({ default: m.Connections })));
 const Tools = lazy(() => import("./pages/Tools").then((m) => ({ default: m.Tools })));
 const Support = lazy(() => import("./pages/Support").then((m) => ({ default: m.Support })));
+const Help = lazy(() => import("./pages/Help").then((m) => ({ default: m.Help })));
 const Report = lazy(() => import("./pages/Report").then((m) => ({ default: m.Report })));
 const Referral = lazy(() => import("./pages/Referral").then((m) => ({ default: m.Referral })));
 const Usage = lazy(() => import("./pages/Usage").then((m) => ({ default: m.Usage })));
@@ -64,6 +65,7 @@ const router = createHashRouter([
       { path: "tools", element: susp(<Tools />) },
       { path: "support", element: susp(<Support />) },
       { path: "report", element: susp(<Report />) },
+      { path: "help", element: susp(<Help />) },
       { path: "referral", element: susp(<Referral />) },
       { path: "usage", element: susp(<Usage />) },
       { path: "account", element: susp(<Account />) },

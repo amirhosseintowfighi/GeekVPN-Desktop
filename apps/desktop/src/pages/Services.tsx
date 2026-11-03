@@ -2,7 +2,8 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { Button, Segmented } from "../design-system/controls";
+import { Button, Segmented, Switch } from "../design-system/controls";
+import { bot, type AutoRenew } from "../lib/account";
 import { Icon } from "../design-system/Icon";
 import { PageHeader } from "../design-system/layout";
 import { errorText, qrCode, qrSave } from "../lib/auth";
@@ -36,6 +37,32 @@ function Meter({ label, value, unit, pct }: { label: string; value: string; unit
 
 type Account = Extract<Source, { kind: "account" }>;
 
+/** «تمدید خودکار از کیف پول», as in the bot's renewal screen. */
+function AutoRenewRow({ id }: { id: string }) {
+  const [v, setV] = useState<AutoRenew | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    bot.autoRenew(id).then(setV, () => setV(null));
+  }, [id]);
+  if (!v?.available) return null;
+  const flip = (on: boolean) => {
+    setError(null);
+    bot.setAutoRenew(id, on).then(setV, (e) => setError(errorText(e)));
+  };
+  return (
+    <div className="flex flex-col gap-1 border-t border-hair pt-3">
+      <div className="flex items-center gap-3">
+        <span className="flex flex-1 flex-col">
+          <span className="text-[13px] font-bold">تمدید خودکار از کیف پول</span>
+          <span className="text-[11px] text-ink-2">کمی قبل از تمام شدن، همین بسته دوباره خریده می‌شود</span>
+        </span>
+        <Switch label="تمدید خودکار" checked={v.enabled} onChange={flip} />
+      </div>
+      {error && <span role="alert" className="text-[11px] text-bad">{error}</span>}
+    </div>
+  );
+}
+
 /** One account service (Desktop-Services card). */
 function ServiceCard({ s, selected, onSelect }: { s: Account; selected: boolean; onSelect: () => void }) {
   const days = daysLeft(s.expiresAt, Date.now());
@@ -68,6 +95,7 @@ function ServiceCard({ s, selected, onSelect }: { s: Account; selected: boolean;
           pct={remaining === null || !s.quotaGib ? 100 : (remaining / s.quotaGib) * 100}
         />
       </div>
+      <AutoRenewRow id={s.subscriptionId} />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-ink-2">{faDigits(s.links.length)} سرور</span>
         <span className="flex gap-2">
@@ -84,8 +112,10 @@ function ServiceCard({ s, selected, onSelect }: { s: Account; selected: boolean;
 }
 
 /** «لینک و QR»: the chosen service's subscription link, to use on other devices. */
-function SharePanel({ s }: { s: Account | null }) {
+function SharePanel({ s, onRotated }: { s: Account | null; onRotated: () => Promise<void> }) {
   const [qr, setQr] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const [rotating, setRotating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const url = s?.url ?? null;
@@ -135,6 +165,39 @@ function SharePanel({ s }: { s: Account | null }) {
             </Button>
           </div>
           <span className="text-[11px] leading-[1.8] text-ink-2">این لینک را در اپ‌های دیگر یا روی دستگاه دیگری اضافه کن. همه از حجم همین سرویس مصرف می‌کنند.</span>
+          {s && (confirm ? (
+            <div className="flex flex-col gap-2 border-t border-hair pt-3">
+              <span className="text-xs leading-[1.8] text-warn">لینک فعلی و همه‌ی دستگاه‌هایی که با آن وصل‌اند قطع می‌شوند و باید لینک تازه را دوباره اضافه کنند.</span>
+              <div className="flex gap-2">
+                <Button
+                  kind="danger"
+                  height={36}
+                  disabled={rotating}
+                  onClick={() => {
+                    setRotating(true);
+                    setNote(null);
+                    bot
+                      .rotate(s.subscriptionId)
+                      .then(onRotated)
+                      .then(() => setNote("لینک تازه ساخته شد."), (e) => setNote(errorText(e)))
+                      .finally(() => {
+                        setRotating(false);
+                        setConfirm(false);
+                      });
+                  }}
+                >
+                  {rotating ? "در حال ساخت…" : "بله، لینک جدید"}
+                </Button>
+                <Button kind="soft" height={36} onClick={() => setConfirm(false)}>
+                  انصراف
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirm(true)} className="self-start text-xs text-ink-2 underline underline-offset-4">
+              لینک لو رفته؟ لینک جدید بگیر
+            </button>
+          ))}
         </>
       ) : (
         <span className="text-xs leading-[1.8] text-ink-2">{s ? "این سرویس لینک اشتراک ندارد." : "یک سرویس را انتخاب کن."}</span>
@@ -255,7 +318,7 @@ export function Services() {
           <span className="pt-1 text-[11px] text-ink-2">لینک اشتراک یا کانفیگ کپی‌شده را بچسبان؛ با <span dir="ltr" className="font-num">Ctrl+V</span> هم کار می‌کند.</span>
         </div>
       </div>
-      {account.length > 0 && <SharePanel s={chosen} />}
+      {account.length > 0 && <SharePanel s={chosen} onRotated={refresh} />}
     </>
   );
 }
