@@ -30,13 +30,13 @@ export function CardTitle({ title, subtitle, actions, micro }: { title: string; 
 export function PageHeader({ title, subtitle, actions, micro }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; micro?: string }) {
   return (
     <header className="flex shrink-0 flex-col gap-[18px]">
-      <div className="flex items-end justify-between gap-5">
-        <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-3">
+        <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
           {micro && <span className="micro">{micro}</span>}
-          <h1 className="m-0 text-[40px] font-extrabold leading-[1.2]">{title}</h1>
-          {subtitle && <span className="text-sm text-ink-2">{subtitle}</span>}
+          <h1 className="m-0 whitespace-nowrap text-[40px] font-extrabold leading-[1.2] max-[1150px]:text-[34px]">{title}</h1>
+          {subtitle && <span className="text-sm leading-[1.7] text-ink-2">{subtitle}</span>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2.5">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center justify-end gap-2.5">{actions}</div>}
       </div>
       <div aria-hidden="true" className="h-px bg-hair" />
     </header>

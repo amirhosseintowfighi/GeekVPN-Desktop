@@ -5,9 +5,9 @@ import { Logo } from "../design-system/Logo";
 import { Button, Hair, RuleRow } from "../design-system/controls";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
-import { countryCode, daysLeft, elapsed, plainName, speed } from "../lib/format";
+import { daysLeft, elapsed, flagOf, plainName, speed } from "../lib/format";
 import { useTunnel } from "../lib/TunnelContext";
-import { ServerPanel } from "./ServerList";
+import { ServerMark, ServerPanel } from "./ServerList";
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(Date.now);
@@ -49,8 +49,8 @@ function LightColumn() {
         <span
           key={o}
           aria-hidden="true"
-          className="pointer-events-none absolute -left-[52px] -z-10 h-[333px] w-[333px] rounded-full bg-light"
-          style={{ top: -52 + i * 36.6, opacity: o }}
+          className="pointer-events-none absolute left-0 -z-10 h-[230px] w-[230px] rounded-full bg-light"
+          style={{ top: i * 30, opacity: o }}
         />
       ))}
     </>
@@ -183,7 +183,7 @@ export function Home() {
           <div className="shrink-0 pb-2">{side}</div>
         </div>
 
-        <div className="flex min-h-0 flex-1 items-center gap-9 max-[1100px]:flex-col max-[1100px]:items-stretch">
+        <div className="flex min-h-0 flex-1 items-center gap-9 overflow-hidden max-[1100px]:flex-col max-[1100px]:items-stretch">
           <div className="relative h-[230px] w-[230px] shrink-0 self-center isolate">
             {on && <LightColumn />}
             <button
@@ -203,7 +203,7 @@ export function Home() {
             </button>
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+          <div className="relative z-10 flex min-w-0 flex-1 flex-col gap-3.5">
             {connecting ? (
               <div className="flex flex-col">
                 <Hair />
@@ -230,20 +230,20 @@ export function Home() {
                   {server ? (
                     <Link to="/servers" className="text-inherit no-underline">
                       <RuleRow
-                        code={view?.autoSelect && !on ? "SV" : countryCode(server.name)}
-                        title={view?.autoSelect && !on ? "خودکار" : plainName(server.name) || server.address}
+                        mark={view?.autoSelect && !on ? <Icon name="bolt" size={18} /> : flagOf(server.name) ? <ServerMark name={server.name} /> : <Icon name="globe" size={18} />}
+                        title={view?.autoSelect && !on ? "خودکار" : <span dir="auto">{plainName(server.name) || server.address}</span>}
                         hint={`سرور · ${routeFa}`}
                         end={<Icon name="chev" size={16} />}
                       />
                     </Link>
                   ) : (
                     <Link to="/services" className="text-inherit no-underline">
-                      <RuleRow code="SV" title="افزودن لینک اشتراک" hint="اول یک سرویس بخر یا لینک اشتراکت را اضافه کن" end={<Icon name="chev" size={16} />} />
+                      <RuleRow mark={<Icon name="link" size={18} />} title="افزودن لینک اشتراک" hint="اول یک سرویس بخر یا لینک اشتراکت را اضافه کن" end={<Icon name="chev" size={16} />} />
                     </Link>
                   )}
                   <RuleRow
-                    code="MD"
-                    title={view?.mode === "tun" ? "حالت TUN" : "پروکسی سیستم"}
+                    mark={<Icon name="shield" size={18} />}
+                    title={(on ? state.mode : view?.mode) === "tun" ? "حالت TUN" : "پروکسی سیستم"}
                     end={
                       on ? (
                         state.mode === "tun" ? (
@@ -256,7 +256,7 @@ export function Home() {
                       )
                     }
                   />
-                  <RuleRow code="TL" title="زمان باقی‌مانده" end={left === null ? "—" : `${faDigits(left)} روز`} />
+                  <RuleRow mark={<Icon name="clock" size={18} />} title="زمان باقی‌مانده" end={left === null ? "—" : `${faDigits(left)} روز`} />
                 </div>
               </>
             )}

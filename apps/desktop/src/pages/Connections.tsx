@@ -4,7 +4,7 @@ import { Badge, Button, ClearChips, IconButton, SearchField } from "../design-sy
 import { EmptyState, PageHeader } from "../design-system/layout";
 import { errorText } from "../lib/auth";
 import { faDigits } from "../lib/fa";
-import { ago, bytes, countryCode, plainName } from "../lib/format";
+import { ago, bytes, countryCode, flagOf, plainName } from "../lib/format";
 import { system, type Connection } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 
@@ -67,7 +67,7 @@ export function Connections() {
   const close = (id?: string) => void system.closeConnection(id).catch((e) => setError(errorText(e)));
 
   const server = on ? view?.servers.find((s) => s.id === state.serverId) : undefined;
-  const through = server ? `VPN · ${countryCode(server.name)}` : "VPN";
+  const through = server ? `VPN · ${flagOf(server.name) ?? countryCode(server.name)}` : "VPN";
 
   if (!tun || !available) {
     return (

@@ -241,7 +241,7 @@ export function Support() {
         )}
       </div>
 
-      <section className="glass-milk flex w-[300px] shrink-0 flex-col gap-3 rounded-[30px] p-5">
+      <section className="glass-milk flex w-[300px] shrink-0 flex-col gap-3 rounded-[30px] p-5 max-[1250px]:w-[260px]">
         <span className="text-lg font-extrabold">تیکت‌های من</span>
         <span className="text-[11px] text-ink-2">جواب‌ها در ربات تلگرام هم می‌آیند</span>
         <Button kind="soft" icon="plus" height={40} onClick={() => setComposing(true)}>

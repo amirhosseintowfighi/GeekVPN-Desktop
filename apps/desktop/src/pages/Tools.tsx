@@ -286,7 +286,7 @@ function SpeedTest() {
   const via = state.status === "on" ? "از داخل تونل فعلی" : "شبکه‌ی خودت، بدون VPN";
 
   return (
-    <Card className="w-[330px] shrink-0" padding={18}>
+    <Card className="w-[330px] shrink-0 max-[1250px]:w-[280px]" padding={18}>
       <CardTitle micro="Speed test" title="تست سرعت" subtitle={via} />
       <div className="relative h-[190px] w-[220px] self-center">
         <svg aria-hidden="true" width="220" height="220" viewBox="0 0 220 220" className="absolute right-0 top-0">

@@ -217,6 +217,7 @@ export function Hair({ vertical }: { vertical?: boolean }) {
  */
 export function RuleRow({
   code,
+  mark,
   title,
   hint,
   end,
@@ -225,6 +226,8 @@ export function RuleRow({
   size = 16,
 }: {
   code?: string;
+  /** In place of `code`: a flag or an icon. */
+  mark?: ReactNode;
   title: ReactNode;
   hint?: ReactNode;
   end?: ReactNode;
@@ -234,10 +237,16 @@ export function RuleRow({
 }) {
   const body = (
     <>
-      {code !== undefined && (
-        <span dir="ltr" className="w-[30px] shrink-0 text-right font-num text-[10px] tracking-[0.18em] text-ink-2">
-          {code}
+      {mark !== undefined ? (
+        <span aria-hidden="true" className="flex w-7 shrink-0 items-center justify-center text-[18px] leading-none text-ink-2">
+          {mark}
         </span>
+      ) : (
+        code !== undefined && (
+          <span dir="ltr" className="w-[30px] shrink-0 text-right font-num text-[10px] tracking-[0.18em] text-ink-2">
+            {code}
+          </span>
+        )
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-start">
         <span className="truncate font-bold" style={{ fontSize: size }}>

@@ -8,6 +8,7 @@ import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
 import { useTunnel } from "../lib/TunnelContext";
+import { useWalletBalance, walletChanged } from "../lib/useWallet";
 import { field, PaymentResult, PendingList } from "./Payment";
 
 const TIER_HINT: Record<string, string> = {
@@ -55,6 +56,7 @@ export function Shop() {
   const [custom, setCustom] = useState(false);
   const [customText, setCustomText] = useState("");
   const [couponText, setCouponText] = useState("");
+  const liveBalance = useWalletBalance();
   // The operator's offer (admin «app.promo_*»), the same banner the Android app shows.
   const [promo, setPromo] = useState<Promo | null>(null);
   useEffect(() => {
@@ -132,9 +134,9 @@ export function Shop() {
   // has not picked a method themselves.
   useEffect(() => {
     if (methodChosen || !quote || !data) return;
-    const short = data.store.walletBalance < quote.total;
+    const short = (liveBalance ?? data.store.walletBalance) < quote.total;
     setMethod(short ? (data.methods[0]?.key ?? "wallet") : "wallet");
-  }, [quote, data, methodChosen]);
+  }, [quote, data, methodChosen, liveBalance]);
   // A code checked for one plan says nothing about another.
   useEffect(() => setCoupon(null), [buyId, customGib]);
 
@@ -198,13 +200,14 @@ export function Shop() {
   };
 
   const finish = () => {
+    walletChanged();
     setStarted(null);
     void refresh();
     load();
     if (started?.kind === "done") navigate("/services");
   };
 
-  const balance = data?.store.walletBalance ?? null;
+  const balance = liveBalance ?? data?.store.walletBalance ?? null;
   const total = quote?.total ?? (custom ? 0 : (plan?.price ?? 0));
   const strike = quote && quote.totalDiscount > 0 ? quote.basePrice : custom ? null : (plan?.compareAtPrice ?? null);
   const shortOfWallet = method === "wallet" && balance !== null && quote !== null && balance < quote.total;
@@ -404,7 +407,7 @@ export function Shop() {
           )}
         </div>
 
-        <div className="flex w-[340px] shrink-0 flex-col gap-4 overflow-y-auto">
+        <div className="flex w-[340px] shrink-0 flex-col gap-4 overflow-y-auto max-[1250px]:w-[290px]">
           {started ? (
             <PaymentResult start={started} amount={quote?.total ?? null} onDone={finish} onClose={() => setStarted(null)} />
           ) : (

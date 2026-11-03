@@ -3,7 +3,8 @@ import { IconButton, Segmented, Switch } from "../design-system/controls";
 import { Icon } from "../design-system/Icon";
 import { Lockup, Logo } from "../design-system/Logo";
 import { desktop } from "../lib/desktop";
-import { countryCode, elapsed, plainName, speed } from "../lib/format";
+import { elapsed, plainName, speed } from "../lib/format";
+import { ServerMark } from "./ServerList";
 import type { Route } from "../lib/servers";
 import { tunnel } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
@@ -126,10 +127,8 @@ export function Flyout() {
                   onClick={() => void pick(s.id)}
                   className={`flex items-center gap-2.5 rounded-full px-3 py-1.5 text-start ${selected ? "bg-white text-navy" : "hover:bg-white/8"}`}
                 >
-                  <span dir="ltr" className={`w-6 font-num text-[10px] tracking-[0.18em] ${selected ? "" : "text-ink-2"}`}>
-                    {countryCode(s.name)}
-                  </span>
-                  <span className="flex-1 truncate text-[13px] font-bold">{plainName(s.name) || s.address}</span>
+                  <ServerMark name={s.name} />
+                  <span dir="auto" className="flex-1 truncate text-start text-[13px] font-bold">{plainName(s.name) || s.address}</span>
                   <span dir="ltr" className="font-num text-xs">
                     {s.delayMs && s.delayMs > 0 ? `${s.delayMs} ms` : "—"}
                   </span>

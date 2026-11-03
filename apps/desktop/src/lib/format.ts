@@ -56,3 +56,14 @@ export function ago(iso: string, nowMs: number): string {
   if (s < 3600) return `${Math.floor(s / 60)} دقیقه پیش`;
   return `${Math.floor(s / 3600)} ساعت پیش`;
 }
+
+/** The flag emoji in a server's name (🇩🇪), or null when it has none. */
+export function flagOf(name: string): string | null {
+  const chars = [...name];
+  for (let i = 0; i + 1 < chars.length; i++) {
+    const a = chars[i]!.codePointAt(0) ?? 0;
+    const b = chars[i + 1]!.codePointAt(0) ?? 0;
+    if (a >= 0x1f1e6 && a <= 0x1f1ff && b >= 0x1f1e6 && b <= 0x1f1ff) return chars[i]! + chars[i + 1]!;
+  }
+  return null;
+}

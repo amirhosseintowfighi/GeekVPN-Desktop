@@ -7,7 +7,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Yekan Bakh", Tahoma, sans-serif;
+  --font-sans: "Twemoji Country Flags", "Yekan Bakh", Tahoma, sans-serif;
   --font-num: "Space Grotesk", "Yekan Bakh", sans-serif;
 
   --color-bg: var(--gv-bg);

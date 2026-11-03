@@ -8,6 +8,7 @@ import { errorText } from "../lib/auth";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
 import { useUnread } from "../lib/useUnread";
+import { walletChanged } from "../lib/useWallet";
 import { useUpdate } from "../shell/UpdateDialog";
 import { field, PaymentResult } from "./Payment";
 
@@ -352,6 +353,7 @@ export function Account() {
               methods={methods}
               onDone={() => {
                 setPanel("none");
+                walletChanged();
                 load();
               }}
             />

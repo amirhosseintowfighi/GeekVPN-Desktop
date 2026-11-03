@@ -1,28 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../design-system/Icon";
-import { Button, Hair, RuleRow, SearchField, Segmented, Switch } from "../design-system/controls";
+import { Button, Hair, SearchField, Segmented, Switch } from "../design-system/controls";
 import { Card, CardTitle, PageHeader } from "../design-system/layout";
 import { faDigits } from "../lib/fa";
-import { countryCode, plainName } from "../lib/format";
+import { countryCode, flagOf, plainName } from "../lib/format";
 import { inTauri } from "../lib/platform";
-import { scanner, type Failover, type ScanView, type ServerView } from "../lib/servers";
+import { scanner, type Failover, type ScanView, type ServerView, type Source } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 
-/** Filter chips: all, starred, then one per source. */
-function useFilters() {
+/** The sources that have servers, the one in use, and its servers. */
+export function useActiveSource() {
   const { view } = useTunnel();
-  const sources = view?.sources.filter((s) => s.links.length > 0) ?? [];
-  return [
-    { id: "all", label: "همه" },
-    { id: "fav", label: "ستاره‌دار" },
-    ...sources.map((s) => ({ id: s.id, label: s.name })),
-  ];
+  const sources = (view?.sources ?? []).filter((s) => s.links.length > 0);
+  const active = sources.find((s) => s.id === view?.activeSource) ?? sources[0] ?? null;
+  const servers = (view?.servers ?? []).filter((s) => s.sourceId === active?.id);
+  return { sources, active, servers };
 }
 
-function matches(s: ServerView, filter: string, q: string): boolean {
-  if (filter === "fav" && !s.favorite) return false;
-  if (filter !== "all" && filter !== "fav" && s.sourceId !== filter) return false;
+function matches(s: ServerView, q: string): boolean {
   const needle = q.trim().toLowerCase();
   return !needle || s.name.toLowerCase().includes(needle) || s.address.toLowerCase().includes(needle);
 }
@@ -31,97 +27,194 @@ function latency(ms: number | null | undefined): string {
   return ms === null || ms === undefined ? "—" : ms > 0 ? `${ms} ms` : "×";
 }
 
-/** Home's side panel (Desktop-Home): search, sources, auto select and the list. */
+/** The server's flag from its name, or its letters when it has none. */
+export function ServerMark({ name, className = "" }: { name: string; className?: string }) {
+  const flag = flagOf(name);
+  return flag ? (
+    <span aria-hidden="true" className={`w-7 shrink-0 text-center text-[18px] leading-none ${className}`}>
+      {flag}
+    </span>
+  ) : (
+    <span aria-hidden="true" dir="ltr" className={`w-7 shrink-0 text-center font-num text-[10px] tracking-[0.12em] opacity-70 ${className}`}>
+      {countryCode(name)}
+    </span>
+  );
+}
+
+/** The name as written: an English name reads left to right inside the Persian page. */
+export function serverName(s: ServerView): string {
+  return plainName(s.name) || s.address;
+}
+
+/** «کدام اشتراک»: pick the subscription whose servers are shown and used. */
+export function SourcePicker({ wide }: { wide?: boolean }) {
+  const { set } = useTunnel();
+  const { sources, active } = useActiveSource();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  if (!active) return null;
+  const sub = (s: Source) => (s.kind === "account" ? s.categoryNameFa || "سرویس" : s.kind === "link" ? "لینک اشتراک" : "کانفیگ دستی");
+  return (
+    <div ref={box} className={`relative ${wide ? "w-[260px]" : "w-full"}`}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="glass-milk flex h-11 w-full items-center gap-2.5 rounded-full ps-4 pe-3 text-start"
+      >
+        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="truncate text-[13px] font-extrabold">{active.name}</span>
+          <span className="truncate text-[10px] text-ink-2">
+            {sub(active)} · {faDigits(active.links.length)} سرور
+          </span>
+        </span>
+        {sources.length > 1 && (
+          <span className={`flex text-ink-2 transition-transform ${open ? "rotate-90" : "-rotate-90"}`}>
+            <Icon name="chev" size={16} />
+          </span>
+        )}
+      </button>
+      {open && sources.length > 1 && (
+        <div role="listbox" aria-label="اشتراک" className="absolute inset-x-0 top-[calc(100%+6px)] z-30 flex flex-col gap-0.5 rounded-[22px] border border-white/25 bg-[#0b1440] p-1.5 shadow-[0_18px_40px_rgba(0,4,30,0.6)]">
+          {sources.map((s) => {
+            const on = s.id === active.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="option"
+                aria-selected={on}
+                onClick={() => {
+                  setOpen(false);
+                  if (!on) void set({ activeSource: s.id });
+                }}
+                className={`flex flex-col rounded-[16px] px-3.5 py-2 text-start ${on ? "bg-white text-navy" : "hover:bg-white/10"}`}
+              >
+                <span className="truncate text-[13px] font-extrabold">{s.name}</span>
+                <span className={`truncate text-[10px] ${on ? "text-navy/60" : "text-ink-2"}`}>
+                  {sub(s)} · {faDigits(s.links.length)} سرور
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One server in Home's panel: flag, name, latency; white when it is the one. */
+function PanelRow({ s, selected, onPick }: { s: ServerView; selected: boolean; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onPick}
+      className={`flex h-12 w-full shrink-0 items-center gap-3 rounded-2xl px-3 text-start transition-colors ${
+        selected ? "bg-white text-navy" : "text-white hover:bg-white/8"
+      }`}
+    >
+      <ServerMark name={s.name} />
+      <span dir="auto" className="min-w-0 flex-1 truncate text-start text-sm font-bold">
+        {serverName(s)}
+      </span>
+      <span dir="ltr" className={`shrink-0 font-num text-xs ${selected ? "text-navy/70" : "text-ink-2"}`}>
+        {latency(s.delayMs)}
+      </span>
+    </button>
+  );
+}
+
+/** Home's side panel (Desktop-Home): the subscription, search, auto select and its servers. */
 export function ServerPanel() {
   const { view, state, testing, test, set } = useTunnel();
-  const [filter, setFilter] = useState("all");
+  const { servers } = useActiveSource();
   const [q, setQ] = useState("");
-  const filters = useFilters().filter((f) => f.id !== "fav").slice(0, 3);
-  const list = useMemo(() => (view?.servers ?? []).filter((s) => matches(s, filter, q)), [view, filter, q]);
+  const list = useMemo(() => servers.filter((s) => matches(s, q)), [servers, q]);
   const activeId = state.status === "on" ? state.serverId : state.status === "connecting" ? state.serverId : view?.selected;
   const auto = view?.autoSelect ?? true;
 
   return (
-    <section className="glass-milk flex w-[320px] shrink-0 flex-col gap-3 rounded-[30px] p-5">
-      <div className="flex items-center justify-between gap-2">
+    <section className="glass-milk flex w-[320px] shrink-0 flex-col gap-3 rounded-[30px] p-4 max-[1250px]:w-[280px]">
+      <div className="flex items-center justify-between gap-2 px-1">
         <span className="text-lg font-extrabold">سرورها</span>
-        <span className="flex items-center gap-2">
-          <span className="micro text-[9px]">{view?.servers.length ?? 0} available</span>
-          <button
-            type="button"
-            aria-label="تست تأخیر همه"
-            title="تست تأخیر همه"
-            disabled={testing || !view?.servers.length}
-            onClick={() => void test()}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-white/80 hover:bg-white/10 disabled:opacity-50"
-          >
-            <span className={testing ? "animate-pulse" : ""}>
-              <Icon name="gauge" size={17} />
-            </span>
-          </button>
-        </span>
+        <button
+          type="button"
+          aria-label="تست تأخیر همه"
+          title="تست تأخیر همه"
+          disabled={testing || !servers.length}
+          onClick={() => void test()}
+          className="flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-white/85 hover:bg-white/10 disabled:opacity-50"
+        >
+          <span className={`flex ${testing ? "animate-pulse" : ""}`}>
+            <Icon name="gauge" size={16} />
+          </span>
+          {testing ? "در حال تست" : "تست"}
+        </button>
       </div>
+      <SourcePicker />
       <SearchField id="server-search" placeholder="جستجوی سرور" value={q} onChange={setQ} />
-      {filters.length > 1 && <Segmented label="منبع" options={filters.map((f) => ({ value: f.id, label: f.label }))} value={filter} onChange={setFilter} height={40} />}
       <button
         type="button"
         aria-pressed={auto}
         onClick={() => void set({ autoSelect: !auto })}
-        className={`flex items-center gap-2.5 rounded-[18px] px-3.5 py-2.5 text-start transition-colors ${auto ? "bg-white text-navy" : "glass-clear"}`}
+        className={`flex h-12 shrink-0 items-center gap-3 rounded-2xl px-3 text-start transition-colors ${auto ? "bg-white text-navy" : "glass-clear"}`}
       >
-        <Icon name="bolt" size={18} />
-        <span className="flex flex-1 flex-col">
+        <span className="flex w-7 justify-center">
+          <Icon name="bolt" size={18} />
+        </span>
+        <span className="flex flex-1 flex-col leading-tight">
           <span className="text-sm font-extrabold">انتخاب خودکار</span>
-          <span className="text-[11px] opacity-70">{auto ? "سریع‌ترین سرور" : "خاموش · سرور دستی"}</span>
+          <span className={`text-[11px] ${auto ? "text-navy/60" : "text-ink-2"}`}>{auto ? "سریع‌ترین سرور همین اشتراک" : "خاموش · سرور دستی"}</span>
         </span>
       </button>
-      <div className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1 [scrollbar-width:thin]">
+      <Hair />
+      <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-1 [scrollbar-width:thin]">
         {list.length === 0 ? (
-          <span className="py-8 text-center text-[13px] leading-[1.9] text-ink-2">
-            {view?.servers.length ? "سروری با این جستجو نیست." : "با ورود به حسابت سرویس‌هایت می‌آیند؛ یا در «سرویس‌ها» لینک اضافه کن."}
+          <span className="px-2 py-8 text-center text-[13px] leading-[1.9] text-ink-2">
+            {servers.length ? "سروری با این جستجو نیست." : "با ورود به حسابت سرویس‌هایت می‌آیند؛ یا در «سرویس‌ها» لینک اضافه کن."}
           </span>
         ) : (
-          <>
-            <Hair />
-            {list.map((s) => (
-              <RuleRow
-                key={s.id}
-                code={countryCode(s.name)}
-                title={plainName(s.name) || s.address}
-                hint={view?.sources.find((x) => x.id === s.sourceId)?.name}
-                end={<span dir="ltr" className="font-num">{latency(s.delayMs)}</span>}
-                size={14}
-                selected={!auto && s.id === activeId}
-                onClick={() => void set({ selected: s.id })}
-              />
-            ))}
-          </>
+          list.map((s) => <PanelRow key={s.id} s={s} selected={!auto && s.id === activeId} onPick={() => void set({ selected: s.id })} />)
         )}
       </div>
     </section>
   );
 }
 
-const COLS = "grid grid-cols-[150px_minmax(0,1fr)_150px_80px_70px_28px] items-center gap-3.5";
+const COLS = "grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_88px_64px_32px] items-center gap-3 max-[1250px]:grid-cols-[minmax(0,1.6fr)_64px_32px] max-[1250px]:[&>*:nth-child(2)]:hidden max-[1250px]:[&>*:nth-child(3)]:hidden";
 
-function ServerLine({ s, active, source }: { s: ServerView; active: boolean; source: string }) {
+function ServerLine({ s, active }: { s: ServerView; active: boolean }) {
   const { set } = useTunnel();
   return (
-    <div className={`${COLS} border-b border-hair py-[5px] text-[13px] ${active ? "-mx-3 rounded-[18px] border-transparent bg-white px-3 text-navy" : ""}`}>
-      <button type="button" onClick={() => void set({ selected: s.id })} aria-pressed={active} className="flex min-w-0 items-center gap-2.5 py-1.5 text-start">
-        <span dir="ltr" className={`w-6 shrink-0 font-num text-[11px] tracking-[0.18em] ${active ? "" : "text-ink-2"}`}>
-          {countryCode(s.name)}
+    <div className={`${COLS} min-h-12 rounded-2xl px-3 text-[13px] ${active ? "bg-white text-navy" : "hover:bg-white/5"}`}>
+      <button type="button" onClick={() => void set({ selected: s.id })} aria-pressed={active} className="flex min-w-0 items-center gap-3 py-2.5 text-start">
+        <ServerMark name={s.name} />
+        <span dir="auto" className="min-w-0 truncate text-start text-sm font-extrabold">
+          {serverName(s)}
         </span>
-        <span className="truncate text-sm font-extrabold">{plainName(s.name) || s.address}</span>
       </button>
-      <span className={`truncate text-xs ${active ? "" : "text-ink-2"}`}>{source}</span>
-      <span dir="ltr" className={`truncate text-right font-num text-xs ${active ? "" : "text-ink-2"}`}>
+      <span dir="ltr" className={`truncate text-right font-num text-xs ${active ? "text-navy/70" : "text-ink-2"}`}>
         {s.protocol} · {s.network}
         {s.security !== "none" ? ` · ${s.security}` : ""}
       </span>
       <span className="flex">
         {s.cdn && (
-          <span className={`inline-flex h-6 items-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-extrabold ${active ? "border-navy/30" : "border-white/25 bg-white/12"}`}>پشت CDN</span>
+          <span className={`inline-flex h-6 items-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-bold ${active ? "border-navy/25" : "border-white/25 bg-white/8"}`}>پشت CDN</span>
         )}
       </span>
       <span dir="ltr" className="text-right font-num text-[13px]">
@@ -132,7 +225,7 @@ function ServerLine({ s, active, source }: { s: ServerView; active: boolean; sou
         aria-label={s.favorite ? "برداشتن ستاره" : "ستاره زدن"}
         aria-pressed={s.favorite}
         onClick={() => void set({ favorite: [s.id, !s.favorite] })}
-        className="flex h-7 w-7 items-center justify-center"
+        className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/10"
       >
         <Icon name="star" size={16} color={s.favorite ? (active ? "#07123A" : "#FFFFFF") : active ? "rgba(7,18,58,0.35)" : "rgba(255,255,255,0.35)"} />
       </button>
@@ -140,20 +233,16 @@ function ServerLine({ s, active, source }: { s: ServerView; active: boolean; sou
   );
 }
 
-/** Desktop-Servers: the ruled table, starred first, then one block per source. */
+/** Desktop-Servers: one subscription's servers, starred first. */
 export function ServersPage() {
   const { view, state, testing, test, set, error } = useTunnel();
-  const [filter, setFilter] = useState("all");
+  const { active, servers } = useActiveSource();
   const [q, setQ] = useState("");
-  const filters = useFilters();
-  const list = useMemo(() => (view?.servers ?? []).filter((s) => matches(s, filter, q)), [view, filter, q]);
+  const list = useMemo(() => servers.filter((s) => matches(s, q)), [servers, q]);
   const activeId = state.status === "on" ? state.serverId : view?.selected;
-  const sourceName = (id: string) => view?.sources.find((x) => x.id === id)?.name ?? "";
-  const count = (id: string) => (view?.servers ?? []).filter((s) => matches(s, id, "")).length;
-  const starred = filter === "all" ? list.filter((s) => s.favorite) : [];
-  const groups = (view?.sources ?? [])
-    .map((src) => ({ src, servers: list.filter((s) => s.sourceId === src.id && !(filter === "all" && s.favorite)) }))
-    .filter((g) => g.servers.length > 0);
+  const auto = view?.autoSelect ?? true;
+  const starred = list.filter((s) => s.favorite);
+  const rest = list.filter((s) => !s.favorite);
 
   return (
     <>
@@ -161,7 +250,7 @@ export function ServersPage() {
         <PageHeader
           micro="Servers"
           title="سرورها"
-          subtitle={view ? `${faDigits(view.servers.length)} سرور از ${faDigits(view.sources.filter((s) => s.links.length).length)} منبع` : undefined}
+          subtitle={active ? `${faDigits(servers.length)} سرور در «${active.name}»` : undefined}
           actions={
             <>
               <div className="w-[180px]">
@@ -170,47 +259,46 @@ export function ServersPage() {
               <Button kind="soft" icon="sort" height={40} aria-pressed={view?.sortByPing} onClick={() => void set({ sortByPing: !view?.sortByPing })}>
                 {view?.sortByPing ? "کمترین پینگ" : "ترتیب اشتراک"}
               </Button>
-              <Button icon="gauge" height={40} disabled={testing || !view?.servers.length} onClick={() => void test()}>
+              <Button icon="gauge" height={40} disabled={testing || !servers.length} onClick={() => void test()}>
                 {testing ? "در حال تست…" : "تست تأخیر همه"}
               </Button>
             </>
           }
         />
-        {filters.length > 1 && (
-          <Segmented label="فیلتر سرورها" height={42} options={filters.slice(0, 5).map((f) => ({ value: f.id, label: `${f.label} · ${faDigits(count(f.id))}` }))} value={filter} onChange={setFilter} />
-        )}
+        <SourcePicker wide />
         {error && <span role="alert" className="text-[13px] text-bad">{error}</span>}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pe-1 [scrollbar-width:thin]">
           {list.length === 0 ? (
             <div className="p-10 text-center text-[13px] text-ink-2">
-              {view?.servers.length ? "سروری با این فیلتر نیست." : "هنوز سروری نداری. وارد حسابت شو یا در «سرویس‌ها» لینک اضافه کن."}
+              {servers.length ? "سروری با این جستجو نیست." : "هنوز سروری نداری. وارد حسابت شو یا در «سرویس‌ها» لینک اضافه کن."}
             </div>
           ) : (
-            <>
-              <div className={`${COLS} pb-2.5`}>
-                {["Server", "Source", "Protocol", "", "Latency", ""].map((h, i) => (
-                  <span key={i} className="micro text-[9px] tracking-[0.2em]">{h}</span>
+            <div className="flex flex-col gap-1">
+              <div className={`${COLS} px-3 pb-1`}>
+                {["Server", "Protocol", "", "Latency", ""].map((h, i) => (
+                  <span key={i} className="micro text-[9px] tracking-[0.2em]">
+                    {h}
+                  </span>
                 ))}
               </div>
+              <Hair />
               {starred.length > 0 && (
                 <>
-                  <span className="micro pb-0.5 pt-2 text-[9px]">Starred</span>
-                  <Hair />
-                  {starred.map((s) => <ServerLine key={s.id} s={s} active={s.id === activeId} source={sourceName(s.sourceId)} />)}
+                  <span className="micro px-3 pt-2 text-[9px]">Starred</span>
+                  {starred.map((s) => (
+                    <ServerLine key={s.id} s={s} active={!auto && s.id === activeId} />
+                  ))}
+                  {rest.length > 0 && <span className="micro px-3 pt-3 text-[9px]">All</span>}
                 </>
               )}
-              {groups.map(({ src, servers }) => (
-                <div key={src.id} className="flex flex-col">
-                  <span className="pb-0.5 pt-3 text-xs font-bold text-ink-2">{src.name}</span>
-                  <Hair />
-                  {servers.map((s) => <ServerLine key={s.id} s={s} active={s.id === activeId} source={src.name} />)}
-                </div>
+              {rest.map((s) => (
+                <ServerLine key={s.id} s={s} active={!auto && s.id === activeId} />
               ))}
-            </>
+            </div>
           )}
         </div>
       </div>
-      <div className="flex w-[330px] shrink-0 flex-col gap-4">
+      <div className="flex w-[330px] shrink-0 flex-col gap-4 max-[1250px]:w-[270px]">
         <AutoCard />
         <OptimizerCard />
       </div>
