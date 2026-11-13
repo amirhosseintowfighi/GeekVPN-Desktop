@@ -227,6 +227,16 @@ export interface Program {
   path: string;
 }
 
+/** «IP خروجی»: what the internet sees through the connection. */
+export interface ExitIp {
+  ip: string;
+  /** ISO 3166 alpha-2, or "" when Cloudflare did not say. */
+  country: string;
+  colo: string;
+}
+
+export const exitIp = () => call<ExitIp>("exit_ip");
+
 export const system = {
   helperStatus: () => call<HelperStatus>("helper_status"),
   helperInstall: () => call<HelperStatus>("helper_install"),

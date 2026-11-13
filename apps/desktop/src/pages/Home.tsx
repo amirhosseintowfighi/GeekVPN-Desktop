@@ -5,7 +5,8 @@ import { Logo } from "../design-system/Logo";
 import { Button, Hair, RuleRow } from "../design-system/controls";
 import { useAuth } from "../lib/AuthContext";
 import { faDigits } from "../lib/fa";
-import { daysLeft, elapsed, flagOf, plainName, speed } from "../lib/format";
+import { countryFa, daysLeft, elapsed, flagFor, flagOf, plainName, speed } from "../lib/format";
+import { exitIp, system, type ExitIp } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 import { ServerMark, ServerPanel } from "./ServerList";
 
@@ -57,6 +58,55 @@ function LightColumn() {
   );
 }
 
+/**
+ * The exit address and, in TUN mode, the open connections, for as long as
+ * the tunnel is up. The address is asked once per connection and server
+ * (again after a failure, and when the window comes back to the front).
+ */
+function useLiveInfo(key: string | null, tun: boolean) {
+  const [exit, setExit] = useState<ExitIp | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [conns, setConns] = useState<number | null>(null);
+  useEffect(() => {
+    setExit(null);
+    setFailed(false);
+    if (!key) return;
+    let alive = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const ask = () =>
+      exitIp().then(
+        (e) => alive && (setExit(e), setFailed(false)),
+        () => {
+          if (!alive) return;
+          setFailed(true);
+          retry = setTimeout(ask, 15_000);
+        },
+      );
+    // A moment for the system proxy / TUN routes to settle.
+    const first = setTimeout(ask, 1500);
+    window.addEventListener("focus", ask);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearTimeout(retry);
+      window.removeEventListener("focus", ask);
+    };
+  }, [key]);
+  useEffect(() => {
+    setConns(null);
+    if (!key || !tun) return;
+    let alive = true;
+    const read = () => system.connections().then((c) => alive && setConns(c.available ? c.connections.length : null), () => {});
+    read();
+    const t = setInterval(read, 5000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [key, tun]);
+  return { exit, failed, conns };
+}
+
 type Step = { title: string; hint?: string; state: "done" | "now" | "next" };
 
 function StepRow({ step }: { step: Step }) {
@@ -102,6 +152,7 @@ export function Home() {
   const noServers = !view?.servers.length;
   const routeFa = view?.route === "smart" ? "مسیر هوشمند" : view?.route === "global" ? "مسیر سراسری" : "مسیر مستقیم";
   const tunKs = view?.mode === "tun" && view.killSwitch;
+  const live = useLiveInfo(on ? `${state.sinceMs}/${state.serverId}` : null, on && state.mode === "tun");
 
   let title: ReactNode;
   let side: ReactNode;
@@ -256,6 +307,24 @@ export function Home() {
                       )
                     }
                   />
+                  {on && (
+                    <RuleRow
+                      mark={live.exit?.country ? <span className="text-[18px] leading-none">{flagFor(live.exit.country)}</span> : <Icon name="globe" size={18} />}
+                      title={live.exit?.country ? `IP خروجی · ${countryFa(live.exit.country)}` : "IP خروجی"}
+                      end={
+                        live.exit ? (
+                          <span dir="ltr" className="font-num select-text">
+                            {live.exit.ip}
+                          </span>
+                        ) : live.failed ? (
+                          "پیدا نشد"
+                        ) : (
+                          "در حال بررسی…"
+                        )
+                      }
+                    />
+                  )}
+                  {on && live.conns !== null && <RuleRow mark={<Icon name="hub" size={18} />} title="اتصالات فعال" end={faDigits(live.conns)} />}
                   <RuleRow mark={<Icon name="clock" size={18} />} title="زمان باقی‌مانده" end={left === null ? "—" : `${faDigits(left)} روز`} />
                 </div>
               </>
