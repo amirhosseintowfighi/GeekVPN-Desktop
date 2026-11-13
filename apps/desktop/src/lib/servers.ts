@@ -51,6 +51,8 @@ export interface ServerView {
   /** Last real delay; ≤ 0 means no answer, null means never tested. */
   delayMs: number | null;
   cdn: boolean;
+  /** The panel's status line («📊 24GB / 200GB»), shown above the list. */
+  info: boolean;
 }
 
 export type SourceKind =

@@ -14,7 +14,7 @@ pub use cdn::{
     is_domain, profile_key, rank, scan_config, verdict, CdnTarget, CfRanges, CleanIp, FailoverPolicy, FailoverThreshold, KEEP, STALE_AFTER_MS,
 };
 pub use geo::{iran_rules, GeoError, RuleLists};
-pub use link::{parse_subscription, LinkError, Protocol, Server};
+pub use link::{is_info_entry, parse_subscription, LinkError, Protocol, Server};
 pub use tuning::{range_ok, Tuning, DEFAULT_DNS};
 pub use rules::{display as rule_display, parse_rule, CustomRule, RuleAction, Target as RuleTarget, MAX_RULES};
 pub use singbox::{tun_config, AppMode, AppRouting, TunHost, TunSpec, Upstream, LINUX_MARK};

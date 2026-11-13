@@ -14,8 +14,27 @@ export function useActiveSource() {
   const { view } = useTunnel();
   const sources = (view?.sources ?? []).filter((s) => s.links.length > 0);
   const active = sources.find((s) => s.id === view?.activeSource) ?? sources[0] ?? null;
-  const servers = (view?.servers ?? []).filter((s) => s.sourceId === active?.id);
-  return { sources, active, servers };
+  const all = (view?.servers ?? []).filter((s) => s.sourceId === active?.id);
+  // The panel's status lines go above the list, unless they are all it has.
+  const real = all.filter((s) => !s.info);
+  const servers = real.length ? real : all;
+  const infos = real.length ? all.filter((s) => s.info) : [];
+  return { sources, active, servers, infos };
+}
+
+/** «📊 24GB / 200GB · ⏳ ۲۸ روز»: what the subscription says about itself. */
+export function SourceInfo() {
+  const { infos } = useActiveSource();
+  if (!infos.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5" aria-label="وضعیت اشتراک">
+      {infos.map((i) => (
+        <span key={i.id} dir="auto" className="inline-flex h-7 max-w-full items-center truncate rounded-full border border-white/20 bg-white/6 px-2.5 text-[11px] font-bold text-ink-2">
+          {i.name.trim()}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function matches(s: ServerView, q: string): boolean {
@@ -167,6 +186,7 @@ export function ServerPanel() {
         </button>
       </div>
       <SourcePicker />
+      <SourceInfo />
       <SearchField id="server-search" placeholder="جستجوی سرور" value={q} onChange={setQ} />
       <button
         type="button"
@@ -265,7 +285,10 @@ export function ServersPage() {
             </>
           }
         />
-        <SourcePicker wide />
+        <div className="flex flex-wrap items-center gap-3">
+          <SourcePicker wide />
+          <SourceInfo />
+        </div>
         {error && <span role="alert" className="text-[13px] text-bad">{error}</span>}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pe-1 [scrollbar-width:thin]">
           {list.length === 0 ? (
