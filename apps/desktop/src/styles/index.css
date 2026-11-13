@@ -67,6 +67,8 @@
   color: var(--gv-text-2);
   white-space: nowrap;
   direction: ltr;
+  /* Stays at the start (right) edge in a stretched RTL column. */
+  align-self: flex-start;
 }
 
 /* GPU-weak devices skip blur and keep the solid navy fallback. */

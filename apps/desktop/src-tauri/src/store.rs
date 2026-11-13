@@ -100,6 +100,8 @@ pub struct Persisted {
     pub scan: ScanData,
     /// «قوانین دامنه و IP», in order; the first that matches decides.
     pub rules: Vec<CustomRule>,
+    /// «تنظیمات پیشرفته».
+    pub tuning: geek_config::Tuning,
 }
 
 /// Results per (domain, network), overrides per (server, network), and
@@ -179,6 +181,7 @@ impl Default for Persisted {
             failover: FailoverThreshold::default(),
             scan: ScanData::default(),
             rules: Vec::new(),
+            tuning: geek_config::Tuning::default(),
         }
     }
 }

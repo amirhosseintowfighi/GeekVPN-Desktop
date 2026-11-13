@@ -183,6 +183,13 @@ export function Settings() {
               }
               onClick={() => navigate("/settings/split")}
             />
+            <Row
+              title="تنظیمات پیشرفته"
+              hint={
+                [view?.tuning.fragment && "Fragment", view?.tuning.mux && "Mux", view?.tuning.blockIpv6 && "بدون IPv6", `DNS ${view?.tuning.dns ?? ""}`].filter(Boolean).join(" · ")
+              }
+              onClick={() => navigate("/settings/advanced")}
+            />
           </Group>
           <Group micro="Kill switch">
             <Row

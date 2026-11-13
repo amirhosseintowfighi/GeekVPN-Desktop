@@ -44,6 +44,7 @@ pub struct ServersView {
     allow_lan: bool,
     apps: AppRouting,
     rules: Vec<CustomRule>,
+    tuning: geek_config::Tuning,
 }
 
 fn view(store: &Store) -> ServersView {
@@ -66,6 +67,7 @@ fn view(store: &Store) -> ServersView {
         allow_lan: store.data.allow_lan,
         apps: store.data.apps.clone(),
         rules: store.data.rules.clone(),
+        tuning: store.data.tuning.clone(),
     }
 }
 
@@ -266,6 +268,7 @@ pub struct Settings {
     expiry_alert: Option<bool>,
     failover: Option<FailoverThreshold>,
     rules: Option<Vec<CustomRule>>,
+    tuning: Option<geek_config::Tuning>,
 }
 
 /// Normalises the customer's rules and refuses a broken one with its reason,
@@ -304,6 +307,7 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
         expiry_alert,
         failover,
         rules,
+        tuning,
     } = settings;
     {
         let mut store = state.store.lock().await;
@@ -313,6 +317,9 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
             } else {
                 store.data.favorites.remove(&id);
             }
+        }
+        if let Some(t) = tuning {
+            store.data.tuning = t.cleaned();
         }
         if let Some(id) = active_source {
             // Another subscription: a server picked by hand in the old one
@@ -390,8 +397,9 @@ pub async fn servers_set(app: AppHandle, state: State<'_, ServersState>, setting
 pub async fn servers_test(app: AppHandle, state: State<'_, ServersState>) -> Result<ServersView, String> {
     let network = tauri::async_runtime::spawn_blocking(crate::scan::current_network).await.map_err(|e| e.to_string())?.key;
     let now = now() * 1000;
-    let (views, scannable, ips) = {
+    let (views, scannable, ips, tuning) = {
         let store = state.store.lock().await;
+        let tuning = store.data.tuning.clone().cleaned();
         let views = store.pool();
         let scannable: Vec<ServerView> = views
             .iter()
@@ -403,7 +411,7 @@ pub async fn servers_test(app: AppHandle, state: State<'_, ServersState>) -> Res
         let mut ips: Vec<String> = scannable.iter().flat_map(|v| store.fresh_ips(v, &network, now)).collect();
         ips.dedup();
         ips.truncate(3);
-        (views, scannable, ips)
+        (views, scannable, ips, tuning)
     };
     if views.is_empty() {
         return changed(&app, &state).await;
@@ -425,10 +433,15 @@ pub async fn servers_test(app: AppHandle, state: State<'_, ServersState>) -> Res
         }
     });
     // Round 0: every server on its own address.
-    let mut items: Vec<_> = views.iter().map(|v| json!({ "id": v.server.id, "config": delay_config(&v.server, None) })).collect();
+    let tested = |s: &Server, ip: Option<&str>| {
+        let mut c = delay_config(s, ip);
+        tuning.apply(&mut c);
+        c
+    };
+    let mut items: Vec<_> = views.iter().map(|v| json!({ "id": v.server.id, "config": tested(&v.server, None) })).collect();
     for ip in &ips {
         for v in &scannable {
-            items.push(json!({ "id": format!("{}@{ip}", v.server.id), "config": delay_config(&v.server, Some(ip)) }));
+            items.push(json!({ "id": format!("{}@{ip}", v.server.id), "config": tested(&v.server, Some(ip)) }));
         }
     }
     let result = core
@@ -542,6 +555,7 @@ pub async fn connect(app: &AppHandle) -> Result<(), String> {
             kill_switch: (d.mode == Mode::Tun && d.kill_switch).then_some(KillSwitch { allow_lan: d.allow_lan, strict: d.strict }),
             apps: d.apps.clone(),
             rules: d.rules.clone(),
+            tuning: d.tuning.clone().cleaned(),
         };
         (list, opts)
     };

@@ -6,6 +6,7 @@ mod cdn;
 mod geo;
 mod link;
 mod rules;
+mod tuning;
 mod singbox;
 mod xray;
 
@@ -14,6 +15,7 @@ pub use cdn::{
 };
 pub use geo::{iran_rules, GeoError, RuleLists};
 pub use link::{parse_subscription, LinkError, Protocol, Server};
+pub use tuning::{range_ok, Tuning, DEFAULT_DNS};
 pub use rules::{display as rule_display, parse_rule, CustomRule, RuleAction, Target as RuleTarget, MAX_RULES};
 pub use singbox::{tun_config, AppMode, AppRouting, TunHost, TunSpec, Upstream, LINUX_MARK};
 pub use xray::{client_config, delay_config, tun_upstream_config, with_block_rules, LocalPorts, Route};
