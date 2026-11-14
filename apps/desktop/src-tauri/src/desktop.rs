@@ -82,6 +82,14 @@ pub fn setup(app: &tauri::App, data: &Persisted, resume: bool) -> tauri::Result<
         tauri::async_runtime::spawn(async move {
             // Let the session revalidate and the store settle first.
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            // «شبکه‌ی امن»: started on a trusted network, stay off.
+            if !resume {
+                let key = tauri::async_runtime::spawn_blocking(crate::scan::current_network).await.map(|n| n.key).unwrap_or_default();
+                let trusted = app.state::<ServersState>().store.lock().await.data.networks.rules.get(&key).is_some_and(|r| r.action == crate::networks::NetAction::Trusted);
+                if trusted {
+                    return;
+                }
+            }
             let _ = crate::servers::connect(&app).await;
         });
     }

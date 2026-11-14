@@ -102,6 +102,8 @@ pub struct Persisted {
     pub rules: Vec<CustomRule>,
     /// «تنظیمات پیشرفته».
     pub tuning: geek_config::Tuning,
+    /// «شبکه‌ها»: connect or disconnect on joining a network.
+    pub networks: crate::networks::NetRules,
 }
 
 /// Results per (domain, network), overrides per (server, network), and
@@ -182,6 +184,7 @@ impl Default for Persisted {
             scan: ScanData::default(),
             rules: Vec::new(),
             tuning: geek_config::Tuning::default(),
+            networks: crate::networks::NetRules::default(),
         }
     }
 }
