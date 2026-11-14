@@ -1,6 +1,7 @@
 mod auth;
 mod deeplink;
 mod desktop;
+mod networks;
 mod report;
 mod scan;
 mod servers;
@@ -149,6 +150,7 @@ pub fn run() {
             restore_on_signals(app.handle().clone(), tunnel);
             desktop::setup(app, &settings, resume)?;
             deeplink::setup(app);
+            networks::watch(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -174,6 +176,9 @@ pub fn run() {
             system::connections_list,
             system::connections_close,
             system::programs_running,
+            networks::networks_view,
+            networks::network_rule_set,
+            networks::network_connect_on_new,
             scan::scan_state,
             scan::scan_start,
             scan::scan_stop,
