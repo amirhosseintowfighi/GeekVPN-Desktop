@@ -12,6 +12,8 @@ fn spec() -> TunSpec {
         core_paths: vec!["/x/geekcore".into()],
         rules: vec![],
         bypass: vec![],
+        dns: String::new(),
+        block_ipv6: false,
     }
 }
 

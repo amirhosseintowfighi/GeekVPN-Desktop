@@ -201,3 +201,60 @@ mod tests {
         assert_eq!(super::median(vec![]), None);
     }
 }
+
+/// «IP خروجی»: the address and country the internet sees, asked through
+/// the running connection (Cloudflare's trace, plain `key=value` lines).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExitIp {
+    pub ip: String,
+    /// ISO 3166 alpha-2, as Cloudflare reports it ("DE").
+    pub country: String,
+    /// The Cloudflare data centre that answered ("FRA").
+    pub colo: String,
+}
+
+/// Reads Cloudflare's `/cdn-cgi/trace`; `None` without an address.
+pub fn parse_trace(body: &str) -> Option<ExitIp> {
+    let get = |k: &str| body.lines().find_map(|l| l.strip_prefix(k).and_then(|r| r.strip_prefix('='))).map(|v| v.trim().to_string());
+    let ip = get("ip").filter(|ip| ip.parse::<std::net::IpAddr>().is_ok())?;
+    let country = get("loc").filter(|c| c.len() == 2 && c.bytes().all(|b| b.is_ascii_uppercase())).unwrap_or_default();
+    let colo = get("colo").filter(|c| c.len() <= 4 && c.bytes().all(|b| b.is_ascii_alphanumeric())).unwrap_or_default();
+    Some(ExitIp { ip, country, colo })
+}
+
+#[tauri::command]
+pub async fn exit_ip(state: State<'_, ServersState>) -> Result<ExitIp, String> {
+    let proxy = match &*state.tunnel.state.lock().await {
+        TunnelState::On { http_port, .. } if *http_port > 0 => Some(*http_port),
+        TunnelState::On { .. } => None,
+        _ => return Err("وصل نیستی.".into()),
+    };
+    let mut builder = reqwest::Client::builder().connect_timeout(Duration::from_secs(8)).timeout(Duration::from_secs(12));
+    builder = match proxy {
+        Some(port) => builder.proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}")).map_err(|e| e.to_string())?),
+        None => builder.no_proxy(),
+    };
+    let client = builder.build().map_err(|e| e.to_string())?;
+    let body = client
+        .get("https://www.cloudflare.com/cdn-cgi/trace")
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+        .map_err(|_| "IP خروجی پیدا نشد؛ اتصال جواب نداد.".to_string())?
+        .text()
+        .await
+        .map_err(|_| "IP خروجی پیدا نشد.".to_string())?;
+    parse_trace(&body).ok_or_else(|| "IP خروجی پیدا نشد.".into())
+}
+
+#[cfg(test)]
+mod trace_tests {
+    #[test]
+    fn reads_the_trace() {
+        let t = super::parse_trace("fl=1f\nh=www.cloudflare.com\nip=203.0.113.7\nts=1\nvisit_scheme=https\nloc=DE\ncolo=FRA\n").unwrap();
+        assert_eq!((t.ip.as_str(), t.country.as_str(), t.colo.as_str()), ("203.0.113.7", "DE", "FRA"));
+        assert!(super::parse_trace("loc=DE\n").is_none());
+        assert_eq!(super::parse_trace("ip=2001:db8::1\nloc=<script>\n").unwrap().country, "");
+    }
+}

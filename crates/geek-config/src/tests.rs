@@ -141,6 +141,8 @@ fn tun_spec(route: Route, apps: AppRouting) -> TunSpec {
         core_paths: vec!["/opt/GeekVPN/geekcore".into()],
         rules: vec![],
         bypass: vec![],
+        dns: String::new(),
+        block_ipv6: false,
     }
 }
 
@@ -241,4 +243,20 @@ fn windows_tun_keeps_block_rules() {
     assert!(c["outbounds"].as_array().unwrap().iter().any(|o| o["tag"] == "block"));
     let plain = with_block_rules(tun_upstream_config(&s, None, &up), &rules[1..]);
     assert_eq!(plain, tun_upstream_config(&s, None, &up));
+}
+
+#[test]
+fn tun_takes_the_chosen_resolver_and_can_refuse_ipv6() {
+    let mut spec = tun_spec(Route::Global, AppRouting::default());
+    spec.dns = "9.9.9.9".into();
+    spec.block_ipv6 = true;
+    let c = tun_config(&spec, &host(true));
+    assert_eq!(c["dns"]["servers"][0]["server"], "9.9.9.9");
+    assert_eq!(c["dns"]["strategy"], "ipv4_only");
+    let rules = c["route"]["rules"].as_array().unwrap();
+    assert_eq!(rules[1]["action"], "hijack-dns");
+    assert_eq!(rules[2], json!({ "ip_version": 6, "action": "reject" }));
+    // Not an address: Cloudflare, as before.
+    spec.dns = "x; rm".into();
+    assert_eq!(tun_config(&spec, &host(true))["dns"]["servers"][0]["server"], "1.1.1.1");
 }

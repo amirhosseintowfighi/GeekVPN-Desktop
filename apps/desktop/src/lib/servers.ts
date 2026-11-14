@@ -18,6 +18,19 @@ export interface CustomRule {
   action: RuleAction;
 }
 
+/** «تنظیمات پیشرفته». */
+export interface Tuning {
+  fragment: boolean;
+  /** "100-200" bytes per piece. */
+  fragmentLength: string;
+  /** "10-20" ms between pieces. */
+  fragmentInterval: string;
+  mux: boolean;
+  /** The resolver's IP address. */
+  dns: string;
+  blockIpv6: boolean;
+}
+
 export interface AppRouting {
   mode: AppMode;
   paths: string[];
@@ -38,6 +51,8 @@ export interface ServerView {
   /** Last real delay; ≤ 0 means no answer, null means never tested. */
   delayMs: number | null;
   cdn: boolean;
+  /** The panel's status line («📊 24GB / 200GB»), shown above the list. */
+  info: boolean;
 }
 
 export type SourceKind =
@@ -83,6 +98,7 @@ export interface ServersView {
   allowLan: boolean;
   apps: AppRouting;
   rules: CustomRule[];
+  tuning: Tuning;
 }
 
 export type TunnelState =
@@ -130,6 +146,7 @@ export interface ServerSettings {
   allowLan?: boolean;
   apps?: AppRouting;
   rules?: CustomRule[];
+  tuning?: Tuning;
 }
 
 const EMPTY: ServersView = {
@@ -151,6 +168,7 @@ const EMPTY: ServersView = {
   allowLan: true,
   apps: { mode: "off", paths: [] },
   rules: [],
+  tuning: { fragment: false, fragmentLength: "100-200", fragmentInterval: "10-20", mux: false, dns: "1.1.1.1", blockIpv6: false },
 };
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -210,6 +228,16 @@ export interface Program {
   name: string;
   path: string;
 }
+
+/** «IP خروجی»: what the internet sees through the connection. */
+export interface ExitIp {
+  ip: string;
+  /** ISO 3166 alpha-2, or "" when Cloudflare did not say. */
+  country: string;
+  colo: string;
+}
+
+export const exitIp = () => call<ExitIp>("exit_ip");
 
 export const system = {
   helperStatus: () => call<HelperStatus>("helper_status"),

@@ -390,3 +390,45 @@ pub fn parse_subscription(body: &str) -> Vec<Server> {
     };
     text.lines().filter_map(|l| Server::parse(l).ok()).collect()
 }
+
+/// Whether a subscription entry is the panel's status line, not a server
+/// the customer would pick: Marzban, 3x-ui, Hiddify and the like put the
+/// account's traffic, days left and state in the names of extra configs
+/// («📊 24.85GB / 200.0GB», «⏳ days left ∞», «amir ✅»). They connect, but
+/// they belong above the list, as information.
+pub fn is_info_entry(name: &str) -> bool {
+    let n = name.trim().to_lowercase();
+    if n.is_empty() {
+        return false;
+    }
+    const MARKS: [char; 8] = ['📊', '⏳', '⌛', '📅', '🗓', '🔋', '♾', '∞'];
+    const WORDS: [&str; 12] = [
+        "days left", "day left", "remaining", "expire", "expiry", "traffic", "انقضا", "باقی‌مانده", "باقیمانده", "روز مانده", "حجم", "مصرف",
+    ];
+    if n.chars().any(|c| MARKS.contains(&c)) || WORDS.iter().any(|w| n.contains(w)) {
+        return true;
+    }
+    // A used/total pair: "24.85GB / 200GB", "1.2 GB/50 GB".
+    let has_size = ["gb", "mb", "tb", "gib", "mib", "گیگ"].iter().any(|u| n.contains(u)) && n.chars().any(|c| c.is_ascii_digit());
+    if has_size && n.contains('/') {
+        return true;
+    }
+    // The account's own name with a state mark: «amir ✅», «user ❌».
+    let marked = n.ends_with('✅') || n.ends_with('❌') || n.ends_with('🟢') || n.ends_with('🔴');
+    marked && n.split_whitespace().count() <= 2
+}
+
+#[cfg(test)]
+mod info_entry_tests {
+    use super::is_info_entry;
+
+    #[test]
+    fn status_lines_are_not_servers() {
+        for info in ["📊 24.85GB / 200.0GB", "⏳ days left ∞", "amir ✅", "gv1405000079 ✅", "1.2 GB/50 GB", "انقضا: ۱۴۰۵/۰۲/۰۱", "Traffic: 10GB"] {
+            assert!(is_info_entry(info), "{info}");
+        }
+        for server in ["🇩🇪 server1 | amir - ", "Germany 01", "🇹🇷 Turkey ✅ fast server", "DE-2 vless ws", "📶 Irancell"] {
+            assert!(!is_info_entry(server), "{server}");
+        }
+    }
+}

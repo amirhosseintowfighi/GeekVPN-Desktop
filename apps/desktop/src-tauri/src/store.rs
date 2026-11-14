@@ -100,6 +100,8 @@ pub struct Persisted {
     pub scan: ScanData,
     /// «قوانین دامنه و IP», in order; the first that matches decides.
     pub rules: Vec<CustomRule>,
+    /// «تنظیمات پیشرفته».
+    pub tuning: geek_config::Tuning,
 }
 
 /// Results per (domain, network), overrides per (server, network), and
@@ -179,6 +181,7 @@ impl Default for Persisted {
             failover: FailoverThreshold::default(),
             scan: ScanData::default(),
             rules: Vec::new(),
+            tuning: geek_config::Tuning::default(),
         }
     }
 }
@@ -193,6 +196,8 @@ pub struct ServerView {
     pub favorite: bool,
     pub delay_ms: Option<i64>,
     pub cdn: bool,
+    /// The panel's status line («📊 24GB / 200GB»), not a server to pick.
+    pub info: bool,
 }
 
 pub struct Store {
@@ -248,6 +253,7 @@ impl Store {
                 favorite: self.data.favorites.contains(&server.id),
                 delay_ms: self.data.delays.get(&server.id).copied(),
                 cdn: server.cdn_fronted(),
+                info: geek_config::is_info_entry(&server.name),
                 source_id,
                 server,
             })
@@ -275,10 +281,15 @@ impl Store {
             .or_else(|| self.data.sources.iter().find(usable))
     }
 
-    /// The active source's servers, in the same order as `servers`.
+    /// The active source's servers, in the same order as `servers`; the
+    /// panel's status lines only when the source has nothing else.
     pub fn pool(&self) -> Vec<ServerView> {
         let Some(active) = self.active_source().map(|s| s.id.clone()) else { return vec![] };
-        self.servers().into_iter().filter(|v| v.source_id == active).collect()
+        let all: Vec<ServerView> = self.servers().into_iter().filter(|v| v.source_id == active).collect();
+        if all.iter().all(|v| v.info) {
+            return all;
+        }
+        all.into_iter().filter(|v| !v.info).collect()
     }
 
     /// The server and its source.
@@ -382,6 +393,11 @@ mod tests {
         assert_eq!(s.fastest()[0].server.name, "B");
         s.data.active_source = Some("x".into());
         assert_eq!(s.fastest().iter().map(|v| v.server.name.as_str()).collect::<Vec<_>>(), ["C"]);
+        // A panel's status line is not tested or picked when there are servers.
+        s.data.active_source = None;
+        s.data.sources[0].links.push("trojan://i@i.example.com:443#%F0%9F%93%8A%2024GB%20%2F%20200GB".into());
+        assert_eq!(s.pool().len(), 2);
+        assert!(s.servers().iter().any(|v| v.info));
         // A source that is gone falls back.
         s.data.active_source = Some("gone".into());
         assert_eq!(s.pool().len(), 2);

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use geek_config::{client_config, iran_rules, tun_upstream_config, AppRouting, CustomRule, LocalPorts, Route, RuleLists, Server, TunSpec, Upstream};
+use geek_config::{client_config, iran_rules, tun_upstream_config, AppRouting, CustomRule, LocalPorts, Route, RuleLists, Server, TunSpec, Tuning, Upstream};
 use geek_core::{CoreError, CoreProcess};
 use geek_ipc::{ErrorCode, Event, Hello, HelperClient, IpcError, KillSwitch, Request, TunInfo, PROTOCOL};
 use geek_netplat::{apply_system_proxy, restore_system_proxy, ProxySpec, Snapshot};
@@ -49,6 +49,8 @@ pub struct ConnectOptions {
     pub kill_switch: Option<KillSwitch>,
     pub apps: AppRouting,
     pub rules: Vec<CustomRule>,
+    /// «تنظیمات پیشرفته»: fragment, mux, DNS, IPv6.
+    pub tuning: Tuning,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -96,6 +98,7 @@ struct Live {
     mode: Mode,
     route: Route,
     rules: Vec<CustomRule>,
+    tuning: Tuning,
     ports: LocalPorts,
     upstream: Upstream,
     config: serde_json::Value,
@@ -240,8 +243,8 @@ impl Tunnel {
             let upstream = Upstream { port: free_port(), username: token(), password: token() };
             let ports = local_ports();
             let config = match opts.mode {
-                Mode::Proxy => client_config(server, over.as_deref(), opts.route, &opts.rules, ports),
-                Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, &opts.rules),
+                Mode::Proxy => proxy_config(server, over.as_deref(), opts.route, &opts.rules, ports, &opts.tuning),
+                Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, &opts.rules, &opts.tuning),
             };
             match self.try_one(&core, server, &config).await {
                 Ok(delay) => {
@@ -266,7 +269,7 @@ impl Tunnel {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default();
-                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), ports, upstream: upstream.clone(), config: config.clone() });
+                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), tuning: opts.tuning.clone(), ports, upstream: upstream.clone(), config: config.clone() });
                     let port = |name: &str| config["inbounds"].as_array().into_iter().flatten().find(|i| i["tag"] == name).and_then(|i| i["port"].as_u64());
                     self.set(
                         app,
@@ -344,6 +347,8 @@ impl Tunnel {
             core_paths: vec![core_path.to_string_lossy().into_owned()],
             rules: opts.rules.clone(),
             bypass,
+            dns: opts.tuning.dns.clone(),
+            block_ipv6: opts.tuning.block_ipv6,
         };
         let info: TunInfo = helper
             .call(Request::TunStart { spec: Box::new(spec), kill_switch: opts.kill_switch }, Duration::from_secs(30))
@@ -584,8 +589,8 @@ impl Tunnel {
         let Some(live) = self.live.lock().await.clone() else { return Err("not connected".into()) };
         let core = self.core().await?;
         let config = match live.mode {
-            Mode::Proxy => client_config(server, over, live.route, &live.rules, live.ports),
-            Mode::Tun => tun_core_config(server, over, &live.upstream, &live.rules),
+            Mode::Proxy => proxy_config(server, over, live.route, &live.rules, live.ports, &live.tuning),
+            Mode::Tun => tun_core_config(server, over, &live.upstream, &live.rules, &live.tuning),
         };
         if live.mode == Mode::Tun {
             // The TUN's routes catch everything but the first server's
@@ -708,13 +713,23 @@ fn free_port() -> u16 {
 /// A random credential for the core's locked SOCKS inbound.
 /// The core behind the TUN. Where sing-box owns the TUN it does the routing;
 /// on Windows (hev) only the core can, and only block rules apply there.
-fn tun_core_config(server: &Server, over: Option<&str>, upstream: &Upstream, rules: &[CustomRule]) -> serde_json::Value {
-    let config = tun_upstream_config(server, over, upstream);
+fn tun_core_config(server: &Server, over: Option<&str>, upstream: &Upstream, rules: &[CustomRule], tuning: &Tuning) -> serde_json::Value {
+    let mut config = tun_upstream_config(server, over, upstream);
+    tuning.apply(&mut config);
     if cfg!(windows) {
-        geek_config::with_block_rules(config, rules)
+        let mut config = geek_config::with_block_rules(config, rules);
+        tuning.with_dns_out(&mut config);
+        config
     } else {
         config
     }
+}
+
+/// System-proxy mode: Xray routes itself; fragment and mux on its outbound.
+fn proxy_config(server: &Server, over: Option<&str>, route: Route, rules: &[CustomRule], ports: LocalPorts, tuning: &Tuning) -> serde_json::Value {
+    let mut config = client_config(server, over, route, rules, ports);
+    tuning.apply(&mut config);
+    config
 }
 
 fn token() -> String {

@@ -71,6 +71,13 @@ pub struct TunSpec {
     /// otherwise Xray's own connection loops through hev).
     #[serde(default)]
     pub bypass: Vec<String>,
+    /// «تنظیمات پیشرفته»: the resolver's IP for names that go through the
+    /// tunnel (Cloudflare when empty or not an address).
+    #[serde(default)]
+    pub dns: String,
+    /// Refuse IPv6 instead of sending it through the tunnel.
+    #[serde(default)]
+    pub block_ipv6: bool,
 }
 
 /// What the helper decides on its own about the machine.
@@ -108,12 +115,15 @@ pub fn tun_config(spec: &TunSpec, host: &TunHost) -> Value {
     let app_mode = if apps.is_empty() { AppMode::Off } else { spec.apps.mode };
     let smart = spec.route == Route::Smart && !spec.direct.is_empty();
 
-    let mut rules = vec![
-        json!({ "action": "sniff" }),
-        json!({ "protocol": "dns", "action": "hijack-dns" }),
+    let mut rules = vec![json!({ "action": "sniff" }), json!({ "protocol": "dns", "action": "hijack-dns" })];
+    // After the DNS hijack, so a lookup sent over IPv6 is still answered.
+    if spec.block_ipv6 {
+        rules.push(json!({ "ip_version": 6, "action": "reject" }));
+    }
+    rules.extend([
         json!({ "process_path": spec.core_paths, "outbound": "direct" }),
         json!({ "ip_is_private": true, "outbound": "direct" }),
-    ];
+    ]);
     let mut dns_rules = vec![json!({ "process_path": spec.core_paths, "server": "local" })];
     match app_mode {
         AppMode::Off => {}
@@ -171,13 +181,15 @@ pub fn tun_config(spec: &TunSpec, host: &TunHost) -> Value {
         route["default_mark"] = json!(mark);
     }
 
-    json!({
+    let block_v6 = spec.block_ipv6;
+    let remote_dns = spec.dns.trim().parse::<std::net::IpAddr>().map(|ip| ip.to_string()).unwrap_or_else(|_| crate::DEFAULT_DNS.to_string());
+    let mut config = json!({
         "log": { "level": "warn", "timestamp": true },
         "dns": {
             "servers": [
                 // Names are resolved on the far side of the tunnel, so the
                 // ISP sees no lookups for what goes through it.
-                { "type": "https", "tag": "remote", "server": "1.1.1.1", "detour": "proxy" },
+                { "type": "https", "tag": "remote", "server": remote_dns, "detour": "proxy" },
                 { "type": "local", "tag": "local" },
             ],
             "rules": dns_rules,
@@ -196,5 +208,9 @@ pub fn tun_config(spec: &TunSpec, host: &TunHost) -> Value {
                 "secret": host.clash_secret,
             },
         },
-    })
+    });
+    if block_v6 {
+        config["dns"]["strategy"] = json!("ipv4_only");
+    }
+    config
 }

@@ -67,3 +67,19 @@ export function flagOf(name: string): string | null {
   }
   return null;
 }
+
+/** 🇩🇪 for "DE". */
+export function flagFor(country: string): string {
+  if (!/^[A-Z]{2}$/.test(country)) return "";
+  return String.fromCodePoint(...[...country].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+/** «آلمان» for "DE", from the browser's own region names. */
+export function countryFa(country: string): string {
+  if (!/^[A-Z]{2}$/.test(country)) return "";
+  try {
+    return new Intl.DisplayNames(["fa"], { type: "region" }).of(country) ?? country;
+  } catch {
+    return country;
+  }
+}

@@ -181,6 +181,7 @@ pub fn run() {
             scan::scan_set_download,
             tools::speed_test,
             tools::speed_cancel,
+            tools::exit_ip,
             tools::core_log,
             usage::usage_local,
             shop::shop_load,
