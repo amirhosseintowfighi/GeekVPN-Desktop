@@ -102,6 +102,8 @@ struct Live {
     ports: LocalPorts,
     upstream: Upstream,
     config: serde_json::Value,
+    /// Windows TUN: the real network card, for the core's direct outbound.
+    iface: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -236,6 +238,8 @@ impl Tunnel {
                 Err(e) => return Err(self.fail(app, helper_message(&e), false).await),
             },
         };
+        // Windows TUN: found before the TUN takes the default route.
+        let iface = if opts.mode == Mode::Tun { physical_interface().await } else { None };
         let of = tries.len() as u32;
         let mut last = String::new();
         for (i, (server, over)) in tries.iter().enumerate() {
@@ -244,7 +248,7 @@ impl Tunnel {
             let ports = local_ports();
             let config = match opts.mode {
                 Mode::Proxy => proxy_config(server, over.as_deref(), opts.route, &opts.rules, ports, &opts.tuning),
-                Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, &opts.rules, &opts.tuning),
+                Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, opts.route, &opts.rules, &opts.tuning, iface.as_deref()),
             };
             match self.try_one(&core, server, &config).await {
                 Ok(delay) => {
@@ -269,7 +273,7 @@ impl Tunnel {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default();
-                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), tuning: opts.tuning.clone(), ports, upstream: upstream.clone(), config: config.clone() });
+                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), tuning: opts.tuning.clone(), ports, upstream: upstream.clone(), config: config.clone(), iface: iface.clone() });
                     let port = |name: &str| config["inbounds"].as_array().into_iter().flatten().find(|i| i["tag"] == name).and_then(|i| i["port"].as_u64());
                     self.set(
                         app,
@@ -590,7 +594,7 @@ impl Tunnel {
         let core = self.core().await?;
         let config = match live.mode {
             Mode::Proxy => proxy_config(server, over, live.route, &live.rules, live.ports, &live.tuning),
-            Mode::Tun => tun_core_config(server, over, &live.upstream, &live.rules, &live.tuning),
+            Mode::Tun => tun_core_config(server, over, &live.upstream, live.route, &live.rules, &live.tuning, live.iface.as_deref()),
         };
         if live.mode == Mode::Tun {
             // The TUN's routes catch everything but the first server's
@@ -711,17 +715,47 @@ fn free_port() -> u16 {
 }
 
 /// A random credential for the core's locked SOCKS inbound.
-/// The core behind the TUN. Where sing-box owns the TUN it does the routing;
-/// on Windows (hev) only the core can, and only block rules apply there.
-fn tun_core_config(server: &Server, over: Option<&str>, upstream: &Upstream, rules: &[CustomRule], tuning: &Tuning) -> serde_json::Value {
-    let mut config = tun_upstream_config(server, over, upstream);
-    tuning.apply(&mut config);
+/// The core behind the TUN. Where sing-box owns the TUN it does the routing.
+/// On Windows (hev) only the core can: with the real network card known,
+/// Iran-direct and the customer's direct rules leave through it; without,
+/// only block rules apply.
+fn tun_core_config(server: &Server, over: Option<&str>, upstream: &Upstream, route: Route, rules: &[CustomRule], tuning: &Tuning, iface: Option<&str>) -> serde_json::Value {
     if cfg!(windows) {
-        let mut config = geek_config::with_block_rules(config, rules);
+        let mut config = geek_config::windows_tun_config(server, over, upstream, route, rules, iface);
+        tuning.apply(&mut config);
         tuning.with_dns_out(&mut config);
         config
     } else {
+        let _ = (route, rules, iface);
+        let mut config = tun_upstream_config(server, over, upstream);
+        tuning.apply(&mut config);
         config
+    }
+}
+
+/// The interface alias of the lowest-metric IPv4 default route that is not
+/// our own TUN (Windows); `None` elsewhere or when it cannot be read.
+async fn physical_interface() -> Option<String> {
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(|| {
+            use std::os::windows::process::CommandExt;
+            let script = "Get-NetRoute -DestinationPrefix 0.0.0.0/0 -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceAlias -notlike 'GeekVPN*' -and $_.InterfaceAlias -notlike 'wintun*' } | Sort-Object { $_.RouteMetric + $_.InterfaceMetric } | Select-Object -First 1 -ExpandProperty InterfaceAlias";
+            let out = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-Command", script])
+                .creation_flags(0x0800_0000)
+                .output()
+                .ok()?;
+            let alias = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            (!alias.is_empty()).then_some(alias)
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+    #[cfg(not(windows))]
+    {
+        None
     }
 }
 
