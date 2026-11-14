@@ -100,6 +100,32 @@ pub fn with_block_rules(mut config: Value, rules: &[crate::rules::CustomRule]) -
     config
 }
 
+/// Windows' TUN (hev) hands every packet to the core, so the core does the
+/// routing sing-box does elsewhere: the customer's rules, then the route's
+/// (Iran direct for «هوشمند», the local network direct). `direct` leaves by
+/// `iface`, the real network card (IP_UNICAST_IF), so it does not come back
+/// into the TUN. Without a known card nothing can go direct safely, and the
+/// config is the plain one: everything to the server, block rules kept.
+pub fn windows_tun_config(server: &Server, address_override: Option<&str>, upstream: &Upstream, route: Route, custom: &[CustomRule], iface: Option<&str>) -> Value {
+    let base = tun_upstream_config(server, address_override, upstream);
+    let Some(iface) = iface.map(str::trim).filter(|i| !i.is_empty()) else {
+        return with_block_rules(base, custom);
+    };
+    let mut config = base;
+    let mut rules = xray_rules(custom);
+    rules.extend(route_rules(route).as_array().cloned().unwrap_or_default());
+    if route != Route::Direct {
+        // Whatever no rule claimed goes to the server, as before.
+        rules.push(json!({ "type": "field", "outboundTag": "proxy", "network": "tcp,udp" }));
+    }
+    config["routing"]["rules"] = Value::Array(rules);
+    if let Some(outs) = config["outbounds"].as_array_mut() {
+        outs.push(json!({ "tag": "direct", "protocol": "freedom", "settings": {}, "streamSettings": { "sockopt": { "interface": iface } } }));
+        outs.push(json!({ "tag": "block", "protocol": "blackhole", "settings": {} }));
+    }
+    config
+}
+
 /// Just the server, for the real-delay test: geekcore dials through the
 /// first outbound, no inbounds and no routing needed.
 pub fn delay_config(server: &Server, address_override: Option<&str>) -> Value {

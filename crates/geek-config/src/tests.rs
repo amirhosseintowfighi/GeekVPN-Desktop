@@ -260,3 +260,22 @@ fn tun_takes_the_chosen_resolver_and_can_refuse_ipv6() {
     spec.dns = "x; rm".into();
     assert_eq!(tun_config(&spec, &host(true))["dns"]["servers"][0]["server"], "1.1.1.1");
 }
+
+#[test]
+fn windows_tun_routes_in_the_core_when_the_card_is_known() {
+    use crate::{CustomRule, RuleAction};
+    let s = Server::parse(VLESS_WS_TLS).unwrap();
+    let up = Upstream { port: 1, username: "u".into(), password: "p".into() };
+    let rules = vec![CustomRule { value: "bank.ir".into(), action: RuleAction::Direct }];
+    let c = windows_tun_config(&s, None, &up, Route::Smart, &rules, Some("Wi-Fi"));
+    let r = c["routing"]["rules"].as_array().unwrap();
+    assert_eq!(r[0]["domain"][0], "domain:bank.ir");
+    assert!(r.iter().any(|x| x["ip"] == json!(["geoip:ir"]) && x["outboundTag"] == "direct"));
+    assert_eq!(r.last().unwrap()["outboundTag"], "proxy");
+    let direct = c["outbounds"].as_array().unwrap().iter().find(|o| o["tag"] == "direct").unwrap();
+    assert_eq!(direct["streamSettings"]["sockopt"]["interface"], "Wi-Fi");
+    // No card: nothing may go direct (it would loop into the TUN).
+    let plain = windows_tun_config(&s, None, &up, Route::Smart, &rules, None);
+    assert!(plain["outbounds"].as_array().unwrap().iter().all(|o| o["tag"] != "direct"));
+    assert_eq!(plain["routing"]["rules"].as_array().unwrap().len(), 1);
+}
