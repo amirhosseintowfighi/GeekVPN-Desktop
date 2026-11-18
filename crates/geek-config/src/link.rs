@@ -1,4 +1,5 @@
-//! Share links (`vless://`, `vmess://`, `trojan://`, `ss://`) to a `Server`.
+//! Share links (`vless://`, `vmess://`, `trojan://`, `ss://`, `wireguard://`)
+//! to a `Server`, and WireGuard `.conf` files to a `wireguard://` link.
 //!
 //! The field names follow the de-facto standard v2rayN and v2rayNG write and
 //! read, so a link copied between any of them means the same server.
@@ -20,6 +21,7 @@ pub enum Protocol {
     Vmess,
     Trojan,
     Shadowsocks,
+    WireGuard,
 }
 
 /// One server, parsed from a share link. The link itself is kept: it is what
@@ -63,6 +65,13 @@ struct Params {
     header_type: String,
     mode: String,
     allow_insecure: bool,
+    /// WireGuard: the interface's addresses, MTU, keepalive, pre-shared key
+    /// and reserved bytes (the private key is `id`, the peer's key `public_key`).
+    wg_address: Vec<String>,
+    mtu: u32,
+    keepalive: u32,
+    preshared: String,
+    reserved: Vec<u8>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -83,6 +92,7 @@ impl Server {
             "trojan" => parse_url(link, Protocol::Trojan)?,
             "vmess" => parse_vmess(link)?,
             "ss" => parse_ss(link)?,
+            "wireguard" | "wg" => parse_wireguard(link)?,
             _ => return Err(LinkError::Unsupported),
         };
         if server.address.is_empty() || server.port == 0 {
@@ -110,6 +120,28 @@ impl Server {
     pub fn outbound(&self, tag: &str, address_override: Option<&str>) -> Value {
         let address = address_override.unwrap_or(&self.address);
         let p = &self.params;
+        if self.protocol == Protocol::WireGuard {
+            // Xray's own userspace WireGuard: no kernel device, so no root.
+            let endpoint = if address.contains(':') { format!("[{address}]:{}", self.port) } else { format!("{address}:{}", self.port) };
+            let mut peer = serde_json::json!({ "publicKey": p.public_key, "endpoint": endpoint });
+            if !p.preshared.is_empty() {
+                peer["preSharedKey"] = Value::from(p.preshared.as_str());
+            }
+            if p.keepalive > 0 {
+                peer["keepAlive"] = Value::from(p.keepalive);
+            }
+            let mut settings = serde_json::json!({
+                "secretKey": p.id,
+                "address": p.wg_address,
+                "peers": [peer],
+                "mtu": if p.mtu > 0 { p.mtu } else { 1420 },
+                "noKernelTun": true,
+            });
+            if !p.reserved.is_empty() {
+                settings["reserved"] = Value::from(p.reserved.clone());
+            }
+            return serde_json::json!({ "tag": tag, "protocol": "wireguard", "settings": settings });
+        }
         let settings = match self.protocol {
             Protocol::Vless => serde_json::json!({ "vnext": [{
                 "address": address, "port": self.port,
@@ -125,12 +157,14 @@ impl Server {
             Protocol::Shadowsocks => serde_json::json!({ "servers": [{
                 "address": address, "port": self.port, "method": p.cipher, "password": p.id
             }]}),
+            Protocol::WireGuard => unreachable!("handled above"),
         };
         let protocol = match self.protocol {
             Protocol::Shadowsocks => "shadowsocks",
             Protocol::Vless => "vless",
             Protocol::Vmess => "vmess",
             Protocol::Trojan => "trojan",
+            Protocol::WireGuard => "wireguard",
         };
         serde_json::json!({
             "tag": tag,
@@ -377,10 +411,138 @@ fn parse_ss(link: &str) -> Result<Server, LinkError> {
     })
 }
 
+/// `wireguard://<private key>@host:port?publickey=…&address=…&mtu=…#name`,
+/// the form v2rayN and NekoBox share.
+fn parse_wireguard(link: &str) -> Result<Server, LinkError> {
+    let url = Url::parse(link).map_err(|_| LinkError::Malformed("not a URL"))?;
+    let q: HashMap<String, String> = url.query_pairs().map(|(k, v)| (k.to_ascii_lowercase(), v.into_owned())).collect();
+    let get = |keys: &[&str]| keys.iter().find_map(|k| q.get(*k).cloned()).unwrap_or_default();
+    let private = percent_decode_str(url.username()).decode_utf8_lossy().to_string();
+    let public = get(&["publickey", "public_key", "peer_public_key", "pbk"]);
+    if private.is_empty() || public.is_empty() {
+        return Err(LinkError::Malformed("wireguard keys"));
+    }
+    let wg_address = split_list(&get(&["address", "ip", "local_address"]));
+    if wg_address.is_empty() {
+        return Err(LinkError::Malformed("wireguard address"));
+    }
+    let reserved = split_list(&get(&["reserved"])).iter().filter_map(|b| b.parse::<u8>().ok()).collect();
+    Ok(Server {
+        id: String::new(),
+        name: decode_name(url.fragment()),
+        protocol: Protocol::WireGuard,
+        address: url.host_str().unwrap_or_default().trim_matches(['[', ']']).to_string(),
+        port: url.port().unwrap_or(51820),
+        network: "udp".into(),
+        security: "none".into(),
+        sni: String::new(),
+        host: String::new(),
+        path: String::new(),
+        link: link.to_string(),
+        params: Params {
+            id: private,
+            public_key: public,
+            preshared: get(&["presharedkey", "preshared_key", "psk"]),
+            wg_address,
+            mtu: get(&["mtu"]).parse().unwrap_or(0),
+            keepalive: get(&["keepalive", "persistentkeepalive"]).parse().unwrap_or(0),
+            reserved,
+            ..Params::default()
+        },
+    })
+}
+
+/// A WireGuard `.conf` (what WGDashboard's share page and most panels hand
+/// out) as one `wireguard://` link, so the store keeps links only.
+/// AmneziaWG files (Jc, S1, H1…) need a different engine and are refused.
+pub fn wireguard_conf_to_link(conf: &str, name: &str) -> Result<String, LinkError> {
+    use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+    let mut section = String::new();
+    let mut iface: HashMap<String, String> = HashMap::new();
+    let mut peer: HashMap<String, String> = HashMap::new();
+    for line in conf.lines() {
+        let line = line.split('#').next().unwrap_or_default().trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line[1..line.len() - 1].trim().to_ascii_lowercase();
+            continue;
+        }
+        let Some((k, v)) = line.split_once('=') else { continue };
+        let (k, v) = (k.trim().to_ascii_lowercase(), v.trim().to_string());
+        match section.as_str() {
+            "interface" => iface.insert(k, v),
+            // Only the first peer: a client config has one.
+            "peer" if !peer.contains_key(&k) => peer.insert(k, v),
+            _ => None,
+        };
+    }
+    if ["jc", "jmin", "jmax", "s1", "s2", "h1", "h2", "h3", "h4"].iter().any(|k| iface.contains_key(*k)) {
+        return Err(LinkError::Unsupported);
+    }
+    let private = iface.get("privatekey").ok_or(LinkError::Malformed("no PrivateKey"))?;
+    let public = peer.get("publickey").ok_or(LinkError::Malformed("no PublicKey"))?;
+    let address = iface.get("address").ok_or(LinkError::Malformed("no Address"))?;
+    let endpoint = peer.get("endpoint").ok_or(LinkError::Malformed("no Endpoint"))?;
+    let (host, port) = endpoint.rsplit_once(':').ok_or(LinkError::Malformed("Endpoint port"))?;
+    let port: u16 = port.trim().parse().map_err(|_| LinkError::Malformed("Endpoint port"))?;
+    let host = host.trim().trim_matches(['[', ']']);
+    let host = if host.contains(':') { format!("[{host}]") } else { host.to_string() };
+    let enc = |s: &str| utf8_percent_encode(s, NON_ALPHANUMERIC).to_string();
+    let address: Vec<String> = split_list(address);
+    let mut link = format!("wireguard://{}@{host}:{port}?publickey={}&address={}", enc(private), enc(public), enc(&address.join(",")));
+    if let Some(psk) = peer.get("presharedkey") {
+        link += &format!("&presharedkey={}", enc(psk));
+    }
+    if let Some(mtu) = iface.get("mtu").and_then(|m| m.parse::<u32>().ok()) {
+        link += &format!("&mtu={mtu}");
+    }
+    if let Some(ka) = peer.get("persistentkeepalive").and_then(|m| m.parse::<u32>().ok()) {
+        link += &format!("&keepalive={ka}");
+    }
+    let name = if name.trim().is_empty() { "WireGuard" } else { name.trim() };
+    link += &format!("#{}", enc(name));
+    Server::parse(&link)?;
+    Ok(link)
+}
+
+/// WGDashboard's share page (`https://panel/#/share?ShareID=…`) has no
+/// config in it; its public API (`/api/sharePeer/get`) does. The API URL for
+/// a share link, or `None` for any other URL.
+pub fn wgdashboard_share_api(url: &str) -> Option<String> {
+    let u = Url::parse(url.trim()).ok()?;
+    let frag = u.fragment()?;
+    let (_, query) = frag.split_once("share?")?;
+    let id = url::form_urlencoded::parse(query.as_bytes()).find(|(k, _)| k == "ShareID").map(|(_, v)| v.into_owned())?;
+    if id.is_empty() {
+        return None;
+    }
+    let mut base = u.clone();
+    base.set_fragment(None);
+    base.set_query(None);
+    let mut path = base.path().to_string();
+    if !path.ends_with('/') {
+        path.push('/');
+    }
+    base.set_path(&format!("{path}api/sharePeer/get"));
+    base.query_pairs_mut().append_pair("ShareID", &id);
+    Some(base.to_string())
+}
+
+/// The `.conf` text from WGDashboard's `sharePeer/get` answer.
+pub fn wgdashboard_conf(body: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    if v["status"] != Value::Bool(true) {
+        return None;
+    }
+    v["data"]["file"].as_str().filter(|f| f.contains("[Interface]")).map(String::from)
+}
+
 /// A subscription body: share links one per line, the whole thing usually
 /// base64. Lines this client cannot read are skipped, not fatal: one exotic
-/// server must not hide the other twenty.
+/// server must not hide the other twenty. A WireGuard `.conf` is one server.
 pub fn parse_subscription(body: &str) -> Vec<Server> {
+    if body.contains("[Interface]") {
+        return wireguard_conf_to_link(body, "WireGuard").ok().and_then(|l| Server::parse(&l).ok()).into_iter().collect();
+    }
     let text = if body.contains("://") {
         body.to_string()
     } else {
@@ -430,5 +592,60 @@ mod info_entry_tests {
         for server in ["🇩🇪 server1 | amir - ", "Germany 01", "🇹🇷 Turkey ✅ fast server", "DE-2 vless ws", "📶 Irancell"] {
             assert!(!is_info_entry(server), "{server}");
         }
+    }
+}
+
+#[cfg(test)]
+mod wireguard_tests {
+    use super::*;
+
+    const CONF: &str = "[Interface]\nPrivateKey = cOFA+x5UvHF+a3xJ6enLkxUyASaA4MbOoTQmB2gzb2s=\nAddress = 10.0.0.2/32, fd00::2/128\nMTU = 1380\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = 9G7IqmZkzNhbfjXWAqzd9B1AE6G1MoaMOP+x5ou6BTk=\nPresharedKey = FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = wg.example.com:51820\nPersistentKeepalive = 25\n";
+
+    #[test]
+    fn a_conf_becomes_one_link_and_an_xray_outbound() {
+        let link = wireguard_conf_to_link(CONF, "آلمان WG").unwrap();
+        assert!(link.starts_with("wireguard://"));
+        let s = Server::parse(&link).unwrap();
+        assert_eq!((s.protocol, s.address.as_str(), s.port, s.name.as_str()), (Protocol::WireGuard, "wg.example.com", 51820, "آلمان WG"));
+        let o = s.outbound("proxy", None);
+        assert_eq!(o["protocol"], "wireguard");
+        let st = &o["settings"];
+        assert_eq!(st["secretKey"], "cOFA+x5UvHF+a3xJ6enLkxUyASaA4MbOoTQmB2gzb2s=");
+        assert_eq!(st["address"], serde_json::json!(["10.0.0.2/32", "fd00::2/128"]));
+        assert_eq!(st["mtu"], 1380);
+        assert_eq!(st["noKernelTun"], true);
+        assert_eq!(st["peers"][0]["publicKey"], "9G7IqmZkzNhbfjXWAqzd9B1AE6G1MoaMOP+x5ou6BTk=");
+        assert_eq!(st["peers"][0]["preSharedKey"], "FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=");
+        assert_eq!(st["peers"][0]["endpoint"], "wg.example.com:51820");
+        assert_eq!(st["peers"][0]["keepAlive"], 25);
+        // A subscription body that is the conf itself.
+        assert_eq!(parse_subscription(CONF).len(), 1);
+    }
+
+    #[test]
+    fn ipv6_endpoints_and_v2rayn_links() {
+        let conf = CONF.replace("wg.example.com:51820", "[2001:db8::1]:443");
+        let s = Server::parse(&wireguard_conf_to_link(&conf, "").unwrap()).unwrap();
+        assert_eq!(s.address, "2001:db8::1");
+        assert_eq!(s.outbound("p", None)["settings"]["peers"][0]["endpoint"], "[2001:db8::1]:443");
+        let v = Server::parse("wireguard://cOFA%2Bx5UvHF%2Ba3xJ6enLkxUyASaA4MbOoTQmB2gzb2s%3D@1.2.3.4:2408?publickey=bmXOC%2BF1FxEMF9dyiK2H5%2F1SUtzH0JuVo51h2wPfgyo%3D&reserved=1,2,3&address=172.16.0.2%2F32&mtu=1280#warp").unwrap();
+        assert_eq!(v.outbound("p", None)["settings"]["reserved"], serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn amneziawg_and_broken_confs_are_refused() {
+        let awg = CONF.replace("MTU = 1380", "MTU = 1380\nJc = 4\nS1 = 20");
+        assert_eq!(wireguard_conf_to_link(&awg, ""), Err(LinkError::Unsupported));
+        assert!(wireguard_conf_to_link("[Interface]\nAddress = 10.0.0.2/32\n", "").is_err());
+    }
+
+    #[test]
+    fn wgdashboard_share_pages() {
+        assert_eq!(wgdashboard_share_api("https://wg.example.com/#/share?ShareID=ab-12").as_deref(), Some("https://wg.example.com/api/sharePeer/get?ShareID=ab-12"));
+        assert_eq!(wgdashboard_share_api("https://p.example/dash/#/share?ShareID=x").as_deref(), Some("https://p.example/dash/api/sharePeer/get?ShareID=x"));
+        assert!(wgdashboard_share_api("https://sub.example/sub/abc").is_none());
+        let body = serde_json::json!({ "status": true, "message": null, "data": { "fileName": "amir", "file": CONF } }).to_string();
+        assert_eq!(wgdashboard_conf(&body).as_deref(), Some(CONF));
+        assert!(wgdashboard_conf(r#"{"status":false,"message":"This link is either expired to invalid","data":null}"#).is_none());
     }
 }

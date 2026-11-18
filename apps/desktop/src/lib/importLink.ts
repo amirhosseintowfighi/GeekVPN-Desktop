@@ -1,7 +1,7 @@
 import jsQR from "jsqr";
 import type { ServersView } from "./servers";
 
-const PREFIXES = ["vless://", "vmess://", "trojan://", "ss://", "https://", "http://"];
+const PREFIXES = ["vless://", "vmess://", "trojan://", "ss://", "wireguard://", "wg://", "https://", "http://"];
 
 /**
  * The link to offer from copied text: a config, or an https subscription.
@@ -10,6 +10,8 @@ const PREFIXES = ["vless://", "vmess://", "trojan://", "ss://", "https://", "htt
  */
 export function linkIn(text: string): string | null {
   const t = text.trim();
+  // A WireGuard config file, as WGDashboard and most panels hand it out.
+  if (/^\[Interface\]/i.test(t) && /PrivateKey\s*=/i.test(t) && /\[Peer\]/i.test(t) && t.length <= 8192) return t;
   if (!t || t.length > 8192 || /\s/.test(t.split("\n")[0] ?? "")) return null;
   const first = t.split(/\r?\n/)[0]!.trim();
   if (!PREFIXES.some((p) => first.toLowerCase().startsWith(p))) return null;

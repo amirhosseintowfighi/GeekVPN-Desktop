@@ -230,7 +230,9 @@ export function Services() {
   const fromImage = async (blob: Blob) => {
     setQrNote(null);
     try {
-      const found = await qrFromImage(blob);
+      // A WireGuard .conf chosen as a file is the config itself.
+      const isConf = blob instanceof File && /\.conf$/i.test(blob.name);
+      const found = isConf ? (await blob.text()).trim() : await qrFromImage(blob);
       if (!found) return setQrNote("در این تصویر QR پیدا نشد. عکس واضح‌تر یا اسکرین‌شات خود QR را امتحان کن.");
       setText(found);
       setBusy(true);
@@ -336,7 +338,7 @@ export function Services() {
               dir="ltr"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="https://… یا vless:// vmess:// trojan:// ss://"
+              placeholder="https://… یا vless:// vmess:// trojan:// ss:// wireguard://"
               className="h-11 min-w-0 flex-1 rounded-full border border-white/25 bg-white/7 px-4 font-num text-xs text-white outline-none placeholder:text-white/60 focus:border-white/60"
             />
             <Button type="submit" kind="soft" icon="plus" height={44} disabled={busy || !text.trim()}>
@@ -344,10 +346,10 @@ export function Services() {
             </Button>
             <label className="glass-milk flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-bold">
               <Icon name="qr" size={17} />
-              از تصویر QR
+              از QR یا فایل
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.conf"
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -359,7 +361,7 @@ export function Services() {
           </form>
           {qrNote && <span role="alert" className="pt-1 text-[12px] text-bad">{qrNote}</span>}
           <span className="pt-1 text-[11px] leading-[1.8] text-ink-2">
-            لینک اشتراک یا کانفیگ کپی‌شده را بچسبان. عکس یا اسکرین‌شات QR را هم می‌توانی انتخاب کنی یا با <span dir="ltr" className="font-num">Ctrl+V</span> در همین صفحه بچسبانی.
+            لینک اشتراک یا کانفیگ کپی‌شده را بچسبان. عکس QR یا فایل WireGuard (‎.conf) را هم می‌توانی انتخاب کنی، یا اسکرین‌شات QR را با <span dir="ltr" className="font-num">Ctrl+V</span> در همین صفحه بچسبانی.
           </span>
         </div>
       </div>
