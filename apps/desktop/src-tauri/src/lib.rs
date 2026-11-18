@@ -1,6 +1,7 @@
 mod auth;
 mod deeplink;
 mod desktop;
+mod lan;
 mod networks;
 mod report;
 mod scan;
@@ -176,6 +177,8 @@ pub fn run() {
             system::connections_list,
             system::connections_close,
             system::programs_running,
+            lan::lan_view,
+            lan::lan_set,
             networks::networks_view,
             networks::network_rule_set,
             networks::network_connect_on_new,

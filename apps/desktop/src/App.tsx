@@ -22,6 +22,7 @@ const Usage = lazy(() => import("./pages/Usage").then((m) => ({ default: m.Usage
 const Account = lazy(() => import("./pages/Account").then((m) => ({ default: m.Account })));
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const Advanced = lazy(() => import("./pages/Advanced").then((m) => ({ default: m.Advanced })));
+const Lan = lazy(() => import("./pages/Lan").then((m) => ({ default: m.Lan })));
 const Networks = lazy(() => import("./pages/Networks").then((m) => ({ default: m.Networks })));
 const Split = lazy(() => import("./pages/Split").then((m) => ({ default: m.Split })));
 
@@ -75,6 +76,7 @@ const router = createHashRouter([
       { path: "settings/split", element: susp(<Split />) },
       { path: "settings/advanced", element: susp(<Advanced />) },
       { path: "settings/networks", element: susp(<Networks />) },
+      { path: "settings/lan", element: susp(<Lan />) },
     ],
   },
 ]);

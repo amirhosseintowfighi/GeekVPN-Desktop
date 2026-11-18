@@ -235,6 +235,7 @@ export function Settings() {
               trailing={<Switch label="اتصال خودکار" checked={view?.autoConnect ?? false} onChange={(v) => void set({ autoConnect: v })} />}
             />
             <Row title="شبکه‌ها" hint="روی Wi-Fi عمومی وصل شو، در خانه قطع" onClick={() => navigate("/settings/networks")} />
+            <Row title="اشتراک در شبکه‌ی محلی" hint="VPN برای گوشی و تلویزیون روی همین Wi-Fi، با QR" onClick={() => navigate("/settings/lan")} />
           </Group>
           <Group micro="General">
             <Row

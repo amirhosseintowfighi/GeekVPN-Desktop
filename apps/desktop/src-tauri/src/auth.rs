@@ -268,7 +268,7 @@ pub fn qr_svg(link: &str) -> Result<String, String> {
 /// subscription and config links are drawn, never arbitrary text.
 fn shareable(link: &str) -> Result<&str, String> {
     let link = link.trim();
-    let ok = link.len() <= 4096 && ["https://", "http://", "vless://", "vmess://", "trojan://", "ss://"].iter().any(|p| link.starts_with(p));
+    let ok = link.len() <= 4096 && ["https://", "http://", "vless://", "vmess://", "trojan://", "ss://", "socks://"].iter().any(|p| link.starts_with(p));
     if ok {
         Ok(link)
     } else {
