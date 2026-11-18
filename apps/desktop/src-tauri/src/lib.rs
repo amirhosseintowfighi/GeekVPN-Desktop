@@ -2,6 +2,7 @@ mod auth;
 mod deeplink;
 mod desktop;
 mod lan;
+mod lock;
 mod networks;
 mod report;
 mod scan;
@@ -139,6 +140,7 @@ pub fn run() {
             tunnel.recover();
             let saved = store::Store::load(data.join("servers.json"));
             let settings = saved.data.clone();
+            app.manage(lock::LockState::new(&settings.lock));
             app.manage(servers::ServersState { store: tokio::sync::Mutex::new(saved), tunnel: tunnel.clone() });
             app.manage(scan::Ranges::new(app.path().resource_dir()?.join("resources").join("cfscan").join("ipv4.txt")));
             app.manage(tools::SpeedRun::default());
@@ -178,6 +180,13 @@ pub fn run() {
             system::connections_close,
             system::programs_running,
             lan::lan_view,
+            lock::lock_state,
+            lock::lock_set_pin,
+            lock::lock_disable,
+            lock::lock_set_idle,
+            lock::lock_now,
+            lock::lock_unlock,
+            lock::lock_forgot,
             lan::lan_set,
             networks::networks_view,
             networks::network_rule_set,

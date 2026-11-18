@@ -258,7 +258,7 @@ GeekVPN-Desktop/
 | تونل تفکیکی + «برنامه‌های ایرانی مستقیم» | geosite/geoip ایران + انتخاب فایل اجرایی برنامه‌ها (`process_path`) | Desktop-Split |
 | اتصال خودکار با روشن شدن / Wi-Fi ناشناس / شبکه‌ی مورد اعتماد | autostart سیستم‌عامل + NetworkMonitor | Desktop-Settings |
 | راهنمای Kill Switch | Kill Switch واقعی با فایروال (WFP / pf / nftables) | Desktop-Settings |
-| قفل برنامه (اثر انگشت) | Windows Hello / Touch ID / polkit | Desktop-Settings |
+| قفل برنامه | رمز عددی ۴ تا ۸ رقم (`lock.rs`): فقط هش Argon2 ذخیره می‌شود؛ قفل در شروع و بعد از بیکاری انتخابی؛ بعد از ۵ اشتباه، انتظار ۳۰ ثانیه تا ۱۰ دقیقه؛ «فراموش کردم» = خروج از حساب و پاک شدن سرویس‌ها و لینک‌ها. پرده‌ی حریم خصوصی است نه رمزنگاری؛ تونل و tray در حالت قفل کار می‌کنند. Windows Hello / Touch ID هنوز نه (بدون دستگاه واقعی قابل تست نیست). | Desktop-Settings |
 | هشدار تمام شدن سرویس (۸۰٪ یا ۳ روز) | نوتیفیکیشن بومی با دکمه‌ی «تمدید» | — |
 | تیکت‌های من + تعداد نخوانده | همان، با badge روی سایدبار | Desktop-Support |
 | گزارش مشکل با redact | همان منطق `ProblemReport.redact` | Desktop-Report |

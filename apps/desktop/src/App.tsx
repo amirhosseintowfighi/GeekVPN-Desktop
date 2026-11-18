@@ -5,6 +5,7 @@ import { desktop, windowLabel } from "./lib/desktop";
 import { Flyout } from "./pages/Flyout";
 import { Login } from "./pages/Login";
 import { TunnelProvider } from "./lib/TunnelContext";
+import { LockGate } from "./shell/LockGate";
 import { AppShell } from "./shell/AppShell";
 import { Home } from "./pages/Home";
 
@@ -23,6 +24,7 @@ const Account = lazy(() => import("./pages/Account").then((m) => ({ default: m.A
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const Advanced = lazy(() => import("./pages/Advanced").then((m) => ({ default: m.Advanced })));
 const Lan = lazy(() => import("./pages/Lan").then((m) => ({ default: m.Lan })));
+const AppLockPage = lazy(() => import("./pages/AppLock").then((m) => ({ default: m.AppLock })));
 const Networks = lazy(() => import("./pages/Networks").then((m) => ({ default: m.Networks })));
 const Split = lazy(() => import("./pages/Split").then((m) => ({ default: m.Split })));
 
@@ -77,6 +79,7 @@ const router = createHashRouter([
       { path: "settings/advanced", element: susp(<Advanced />) },
       { path: "settings/networks", element: susp(<Networks />) },
       { path: "settings/lan", element: susp(<Lan />) },
+      { path: "settings/lock", element: susp(<AppLockPage />) },
     ],
   },
 ]);
@@ -114,9 +117,11 @@ export function App() {
   }
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <Gate />
-      </AuthProvider>
+      <LockGate>
+        <AuthProvider>
+          <Gate />
+        </AuthProvider>
+      </LockGate>
     </ErrorBoundary>
   );
 }

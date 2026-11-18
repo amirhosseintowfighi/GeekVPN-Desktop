@@ -106,6 +106,8 @@ pub struct Persisted {
     pub networks: crate::networks::NetRules,
     /// «اشتراک در شبکه‌ی محلی».
     pub lan_share: geek_config::LanShare,
+    /// «قفل برنامه».
+    pub lock: crate::lock::AppLock,
 }
 
 /// Results per (domain, network), overrides per (server, network), and
@@ -188,6 +190,7 @@ impl Default for Persisted {
             tuning: geek_config::Tuning::default(),
             networks: crate::networks::NetRules::default(),
             lan_share: geek_config::LanShare::default(),
+            lock: crate::lock::AppLock::default(),
         }
     }
 }
