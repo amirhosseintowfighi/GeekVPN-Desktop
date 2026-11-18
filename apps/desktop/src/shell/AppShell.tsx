@@ -4,6 +4,7 @@ import { shortcutTarget } from "../lib/nav";
 import { currentOs } from "../lib/platform";
 import { useTunnel } from "../lib/TunnelContext";
 import { Backdrop, lightFor } from "./Backdrop";
+import { ClipboardOffer } from "./ClipboardOffer";
 import { Sidebar } from "./Sidebar";
 import { TitleBar } from "./TitleBar";
 import { UpdateProvider } from "./UpdateDialog";
@@ -38,6 +39,7 @@ export function AppShell() {
             <Outlet />
           </main>
         </div>
+        <ClipboardOffer />
       </UpdateProvider>
     </div>
   );

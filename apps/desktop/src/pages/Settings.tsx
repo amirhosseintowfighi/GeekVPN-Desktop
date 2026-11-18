@@ -9,6 +9,7 @@ import { inTauri } from "../lib/platform";
 import { system, type HelperStatus, type Mode, type Route } from "../lib/servers";
 import { desktop } from "../lib/desktop";
 import { currentOs } from "../lib/platform";
+import { clipboardOfferOn, setClipboardOffer } from "../shell/ClipboardOffer";
 import { useTunnel } from "../lib/TunnelContext";
 import { useUpdate } from "../shell/UpdateDialog";
 
@@ -107,6 +108,7 @@ function HelperCard() {
 }
 
 export function Settings() {
+  const [clip, setClip] = useState(clipboardOfferOn);
   const update = useUpdate();
   const { view, set, state } = useTunnel();
   const navigate = useNavigate();
@@ -238,6 +240,11 @@ export function Settings() {
             <Row title="اشتراک در شبکه‌ی محلی" hint="VPN برای گوشی و تلویزیون روی همین Wi-Fi، با QR" onClick={() => navigate("/settings/lan")} />
           </Group>
           <Group micro="General">
+            <Row
+              title="تشخیص لینک کپی‌شده"
+              hint="وقتی برنامه را باز می‌کنی و لینک اشتراک یا کانفیگ کپی کرده‌ای، افزودنش را پیشنهاد می‌دهد"
+              trailing={<Switch label="تشخیص لینک کپی‌شده" checked={clip} onChange={(v) => { setClipboardOffer(v); setClip(v); }} />}
+            />
             <Row
               title="بستن = رفتن به کنار ساعت"
               hint="برنامه و اتصال در tray می‌مانند"
