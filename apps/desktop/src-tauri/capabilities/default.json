@@ -15,6 +15,7 @@
     "core:window:allow-set-always-on-top",
     "os:allow-platform",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
     "dialog:allow-open",
     "dialog:allow-save",
     "core:window:allow-hide"

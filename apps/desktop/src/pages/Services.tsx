@@ -7,6 +7,7 @@ import { bot, type AutoRenew } from "../lib/account";
 import { Icon } from "../design-system/Icon";
 import { PageHeader } from "../design-system/layout";
 import { errorText, qrCode, qrSave } from "../lib/auth";
+import { qrFromImage } from "../lib/importLink";
 import { faDigits } from "../lib/fa";
 import { daysLeft } from "../lib/format";
 import type { Source } from "../lib/servers";
@@ -225,6 +226,33 @@ export function Services() {
   const shown = show === "active" ? active : account;
   const chosen = account.find((s) => s.id === pick) ?? shown[0] ?? null;
 
+  const [qrNote, setQrNote] = useState<string | null>(null);
+  const fromImage = async (blob: Blob) => {
+    setQrNote(null);
+    try {
+      const found = await qrFromImage(blob);
+      if (!found) return setQrNote("در این تصویر QR پیدا نشد. عکس واضح‌تر یا اسکرین‌شات خود QR را امتحان کن.");
+      setText(found);
+      setBusy(true);
+      if (await add(found)) setText("");
+      setBusy(false);
+    } catch {
+      setQrNote("این فایل تصویر خوانده نشد.");
+    }
+  };
+  // An image pasted anywhere on the page (a screenshot of a QR) is read too.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
+      if (file) {
+        e.preventDefault();
+        void fromImage(file);
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  });
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -314,8 +342,25 @@ export function Services() {
             <Button type="submit" kind="soft" icon="plus" height={44} disabled={busy || !text.trim()}>
               {busy ? "در حال افزودن…" : "افزودن"}
             </Button>
+            <label className="glass-milk flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-bold">
+              <Icon name="qr" size={17} />
+              از تصویر QR
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void fromImage(f);
+                }}
+              />
+            </label>
           </form>
-          <span className="pt-1 text-[11px] text-ink-2">لینک اشتراک یا کانفیگ کپی‌شده را بچسبان؛ با <span dir="ltr" className="font-num">Ctrl+V</span> هم کار می‌کند.</span>
+          {qrNote && <span role="alert" className="pt-1 text-[12px] text-bad">{qrNote}</span>}
+          <span className="pt-1 text-[11px] leading-[1.8] text-ink-2">
+            لینک اشتراک یا کانفیگ کپی‌شده را بچسبان. عکس یا اسکرین‌شات QR را هم می‌توانی انتخاب کنی یا با <span dir="ltr" className="font-num">Ctrl+V</span> در همین صفحه بچسبانی.
+          </span>
         </div>
       </div>
       {account.length > 0 && <SharePanel s={chosen} onRotated={refresh} />}
