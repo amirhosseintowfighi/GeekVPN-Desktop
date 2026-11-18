@@ -7,6 +7,9 @@ describe("linkIn", () => {
     expect(linkIn("  vless://abc@host:443?security=reality#DE  ")).toBe("vless://abc@host:443?security=reality#DE");
     expect(linkIn("https://panel.example.com:2096/sub/abc123")).toBe("https://panel.example.com:2096/sub/abc123");
     expect(linkIn("vmess://a\nss://b")).toBe("vmess://a\nss://b");
+    expect(linkIn("wireguard://key@1.2.3.4:51820?publickey=x&address=10.0.0.2/32#wg")).toContain("wireguard://");
+    const conf = "[Interface]\nPrivateKey = abc=\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = def=\nEndpoint = wg.example:51820\n";
+    expect(linkIn(conf)).toBe(conf.trim());
   });
   it("ignores ordinary text and web pages", () => {
     expect(linkIn("")).toBeNull();

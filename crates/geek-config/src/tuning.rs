@@ -84,7 +84,8 @@ impl Tuning {
                 needs_fragment = true;
             }
             let vision = o["settings"]["vnext"][0]["users"][0]["flow"].as_str().is_some_and(|f| !f.is_empty());
-            if self.mux && !vision && !matches!(network.as_str(), "xhttp" | "grpc") {
+            let wireguard = o["protocol"] == "wireguard";
+            if self.mux && !vision && !wireguard && !matches!(network.as_str(), "xhttp" | "grpc") {
                 o["mux"] = json!({ "enabled": true, "concurrency": 8, "xudpConcurrency": 16, "xudpProxyUDP443": "reject" });
             }
         }

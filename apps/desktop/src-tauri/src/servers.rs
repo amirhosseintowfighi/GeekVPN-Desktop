@@ -118,7 +118,7 @@ pub async fn servers_refresh(
             let old_links = previous.iter().find(|s| s.id == id).map(|s| s.links.clone()).unwrap_or_default();
             // Expired or suspended services keep their card but offer no servers.
             let links = if card.state == "active" {
-                match api.fetch_subscription(&url).await {
+                match subscription_body(&api, &url).await {
                     Ok(body) => parse_subscription(&body).into_iter().map(|s| s.link).collect(),
                     Err(e) => {
                         problems.push(e.user_message());
@@ -162,7 +162,7 @@ pub async fn servers_refresh(
         .filter_map(|s| s.url.clone().map(|u| (s.id.clone(), u)))
         .collect();
     for (id, url) in links {
-        match api.fetch_subscription(&url).await {
+        match subscription_body(&api, &url).await {
             Ok(body) => {
                 let fresh: Vec<String> = parse_subscription(&body).into_iter().map(|s| s.link).collect();
                 if let Some(src) = state.store.lock().await.data.sources.iter_mut().find(|s| s.id == id) {
@@ -195,7 +195,7 @@ pub async fn servers_add(
 ) -> Result<ServersView, String> {
     let text = text.trim();
     if text.starts_with("http://") || text.starts_with("https://") {
-        let body = auth.session.api().fetch_subscription(text).await.map_err(|e| e.user_message())?;
+        let body = subscription_body(auth.session.api(), text).await.map_err(|e| e.user_message())?;
         let servers = parse_subscription(&body);
         if servers.is_empty() {
             return Err("این لینک اشتراک سروری که برنامه بشناسد نداشت.".into());
@@ -496,6 +496,28 @@ pub async fn tunnel_state(state: State<'_, ServersState>) -> Result<TunnelState,
 #[tauri::command]
 pub async fn tunnel_connect(app: AppHandle) -> Result<(), String> {
     connect(&app).await
+}
+
+/// A subscription's body. A WGDashboard share page (what the bot hands out
+/// for a WireGuard service, as the URL itself or as the body behind it) has
+/// no config in it: its public `sharePeer/get` API returns the `.conf`.
+pub async fn subscription_body(api: &geek_api::ApiClient, url: &str) -> Result<String, geek_api::ApiError> {
+    let api_url = match geek_config::wgdashboard_share_api(url) {
+        Some(a) => a,
+        None => {
+            let body = api.fetch_subscription(url).await?;
+            match geek_config::wgdashboard_share_api(body.trim()) {
+                Some(a) if body.trim().lines().count() == 1 => a,
+                _ => return Ok(body),
+            }
+        }
+    };
+    let answer = api.fetch_subscription(&api_url).await?;
+    geek_config::wgdashboard_conf(&answer).ok_or_else(|| geek_api::ApiError::Http {
+        status: 404,
+        title: "wireguard share".into(),
+        message_fa: Some("لینک اشتراک WireGuard منقضی شده یا دیگر معتبر نیست. از ربات لینک تازه بگیر.".into()),
+    })
 }
 
 /// The same from the tray, the shortcut and auto-connect.
