@@ -37,3 +37,13 @@ describe("lock PIN", () => {
     expect(pinOk("12a4")).toBe(false);
   });
 });
+
+import { countdown } from "./timer";
+
+describe("auto-off countdown", () => {
+  it("shows hours only when needed", () => {
+    expect(countdown(1000 + 3909_000, 1000)).toBe("1:05:09");
+    expect(countdown(309_000, 0)).toBe("5:09");
+    expect(countdown(0, 5000)).toBe("0:00");
+  });
+});

@@ -9,6 +9,7 @@ import { countryFa, daysLeft, elapsed, flagFor, flagOf, plainName, speed } from 
 import { exitIp, system, type ExitIp } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
 import { ServerMark, ServerPanel } from "./ServerList";
+import { countdown, timer, useAutoOff } from "../lib/timer";
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(Date.now);
@@ -132,6 +133,45 @@ function StepRow({ step }: { step: Step }) {
 }
 
 /** Desktop-Home, Desktop-Home (قطع) and Desktop-Home-Connecting, driven by the real tunnel state. */
+const AUTO_OFF = [
+  { minutes: 30, label: "۳۰ دقیقه" },
+  { minutes: 60, label: "۱ ساعت" },
+  { minutes: 120, label: "۲ ساعت" },
+  { minutes: 240, label: "۴ ساعت" },
+] as const;
+
+/** «قطع خودکار»: end this connection after a while. */
+function AutoOff({ now }: { now: number }) {
+  const deadline = useAutoOff();
+  const chip = "h-7 rounded-full px-2.5 text-[11px] font-bold hover:bg-white/15";
+  return (
+    <RuleRow
+      mark={<Icon name="power" size={18} />}
+      title="قطع خودکار"
+      end={
+        deadline ? (
+          <span className="flex items-center gap-2">
+            <span dir="ltr" className="font-num">
+              {countdown(deadline, now)}
+            </span>
+            <button type="button" className={`${chip} bg-white/10`} onClick={() => void timer.set(null)}>
+              لغو
+            </button>
+          </span>
+        ) : (
+          <span className="flex items-center gap-1">
+            {AUTO_OFF.map((o) => (
+              <button key={o.minutes} type="button" className={`${chip} bg-white/7`} onClick={() => void timer.set(o.minutes)}>
+                {o.label}
+              </button>
+            ))}
+          </span>
+        )
+      }
+    />
+  );
+}
+
 export function Home() {
   const { view: auth, showSignIn } = useAuth();
   const { view, state, stats, busy, toggle, disconnect } = useTunnel();
@@ -325,6 +365,7 @@ export function Home() {
                     />
                   )}
                   {on && live.conns !== null && <RuleRow mark={<Icon name="hub" size={18} />} title="اتصالات فعال" end={faDigits(live.conns)} />}
+                  {on && <AutoOff now={now} />}
                   <RuleRow mark={<Icon name="clock" size={18} />} title="زمان باقی‌مانده" end={left === null ? "—" : `${faDigits(left)} روز`} />
                 </div>
               </>
