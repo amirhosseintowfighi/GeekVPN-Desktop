@@ -25,3 +25,15 @@ describe("alreadyAdded", () => {
     expect(alreadyAdded("vless://one", null)).toBe(false);
   });
 });
+
+import { asciiDigits, pinOk } from "./lock";
+
+describe("lock PIN", () => {
+  it("accepts Persian digits as typed", () => {
+    expect(asciiDigits("۱۲۳۴")).toBe("1234");
+    expect(asciiDigits("٤٥٦٧")).toBe("4567");
+    expect(pinOk("۱۲۳۴")).toBe(true);
+    expect(pinOk("123")).toBe(false);
+    expect(pinOk("12a4")).toBe(false);
+  });
+});
