@@ -7,19 +7,21 @@ import { plainName } from "../lib/format";
 import { inTauri } from "../lib/platform";
 import { scanner, tools, type ScanView, type SpeedResult } from "../lib/servers";
 import { useTunnel } from "../lib/TunnelContext";
+import { LeakTest } from "./LeakTest";
 import { ServerPanel } from "./ServerList";
 
-type Tab = "scan" | "delay" | "log";
+type Tab = "scan" | "delay" | "leak" | "log";
 
 export function Tools() {
   const [tab, setTab] = useState<Tab>("scan");
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-      <PageHeader micro="Tools" title="ابزارها" subtitle="اسکنر IP تمیز، تست سرعت و لاگ هسته" />
+      <PageHeader micro="Tools" title="ابزارها" subtitle="اسکنر IP تمیز، تست سرعت، تست نشت و لاگ هسته" />
       <ClearChips
         options={[
           { value: "scan", label: "اسکنر و تست سرعت" },
           { value: "delay", label: "تست تأخیر سرورها" },
+          { value: "leak", label: "تست نشت" },
           { value: "log", label: "لاگ هسته" },
         ]}
         value={tab}
@@ -36,6 +38,7 @@ export function Tools() {
           <ServerPanel />
         </div>
       )}
+      {tab === "leak" && <LeakTest />}
       {tab === "log" && <CoreLog />}
     </div>
   );

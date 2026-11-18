@@ -3,6 +3,7 @@ mod backup;
 mod deeplink;
 mod desktop;
 mod lan;
+mod leak;
 mod lock;
 mod networks;
 mod report;
@@ -183,6 +184,7 @@ pub fn run() {
             backup::backup_save,
             backup::backup_restore,
             lan::lan_view,
+            leak::leak_test,
             lock::lock_state,
             lock::lock_set_pin,
             lock::lock_disable,
