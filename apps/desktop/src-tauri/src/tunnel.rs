@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use geek_config::{client_config, iran_rules, tun_upstream_config, AppRouting, CustomRule, LocalPorts, Route, RuleLists, Server, TunSpec, Tuning, Upstream};
+use geek_config::{client_config, LanShare, iran_rules, tun_upstream_config, AppRouting, CustomRule, LocalPorts, Route, RuleLists, Server, TunSpec, Tuning, Upstream};
 use geek_core::{CoreError, CoreProcess};
 use geek_ipc::{ErrorCode, Event, Hello, HelperClient, IpcError, KillSwitch, Request, TunInfo, PROTOCOL};
 use geek_netplat::{apply_system_proxy, restore_system_proxy, ProxySpec, Snapshot};
@@ -51,6 +51,8 @@ pub struct ConnectOptions {
     pub rules: Vec<CustomRule>,
     /// «تنظیمات پیشرفته»: fragment, mux, DNS, IPv6.
     pub tuning: Tuning,
+    /// «اشتراک در شبکه‌ی محلی».
+    pub lan: LanShare,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -104,6 +106,8 @@ struct Live {
     config: serde_json::Value,
     /// Windows TUN: the real network card, for the core's direct outbound.
     iface: Option<String>,
+    /// The LAN share as it runs (`None`: off, or its port was taken).
+    lan: Option<LanShare>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -240,6 +244,11 @@ impl Tunnel {
         };
         // Windows TUN: found before the TUN takes the default route.
         let iface = if opts.mode == Mode::Tun { physical_interface().await } else { None };
+        // The LAN share is a side door: a taken port leaves it off, not the VPN.
+        let lan = {
+            let ours = self.live.lock().await.as_ref().and_then(|l| l.lan.as_ref().map(|x| x.port));
+            (opts.lan.on && opts.lan.valid() && (ours == Some(opts.lan.port) || port_free(opts.lan.port))).then(|| opts.lan.clone())
+        };
         let of = tries.len() as u32;
         let mut last = String::new();
         for (i, (server, over)) in tries.iter().enumerate() {
@@ -250,6 +259,10 @@ impl Tunnel {
                 Mode::Proxy => proxy_config(server, over.as_deref(), opts.route, &opts.rules, ports, &opts.tuning),
                 Mode::Tun => tun_core_config(server, over.as_deref(), &upstream, opts.route, &opts.rules, &opts.tuning, iface.as_deref()),
             };
+            let mut config = config;
+            if let Some(l) = &lan {
+                l.apply(&mut config);
+            }
             match self.try_one(&core, server, &config).await {
                 Ok(delay) => {
                     let brought_up = match &helper {
@@ -273,7 +286,7 @@ impl Tunnel {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default();
-                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), tuning: opts.tuning.clone(), ports, upstream: upstream.clone(), config: config.clone(), iface: iface.clone() });
+                    *self.live.lock().await = Some(Live { mode: opts.mode, route: opts.route, rules: opts.rules.clone(), tuning: opts.tuning.clone(), ports, upstream: upstream.clone(), config: config.clone(), iface: iface.clone(), lan: lan.clone() });
                     let port = |name: &str| config["inbounds"].as_array().into_iter().flatten().find(|i| i["tag"] == name).and_then(|i| i["port"].as_u64());
                     self.set(
                         app,
@@ -483,6 +496,11 @@ impl Tunnel {
         }
     }
 
+    /// The LAN share as the running connection has it.
+    pub async fn lan_running(&self) -> Option<LanShare> {
+        self.live.lock().await.as_ref().and_then(|l| l.lan.clone())
+    }
+
     pub async fn disconnect(&self, app: &AppHandle) {
         let was_live = self.live.lock().await.take().is_some();
         self.release_system_proxy().await;
@@ -596,6 +614,10 @@ impl Tunnel {
             Mode::Proxy => proxy_config(server, over, live.route, &live.rules, live.ports, &live.tuning),
             Mode::Tun => tun_core_config(server, over, &live.upstream, live.route, &live.rules, &live.tuning, live.iface.as_deref()),
         };
+        let mut config = config;
+        if let Some(l) = &live.lan {
+            l.apply(&mut config);
+        }
         if live.mode == Mode::Tun {
             // The TUN's routes catch everything but the first server's
             // addresses: the new one's must go around it too, or the core's
@@ -708,6 +730,11 @@ pub fn helper_message(e: &IpcError) -> String {
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default()
+}
+
+/// Whether the LAN share's port can be taken on every address.
+fn port_free(port: u16) -> bool {
+    TcpListener::bind(("0.0.0.0", port)).is_ok()
 }
 
 fn free_port() -> u16 {

@@ -556,6 +556,7 @@ pub async fn connect(app: &AppHandle) -> Result<(), String> {
             apps: d.apps.clone(),
             rules: d.rules.clone(),
             tuning: d.tuning.clone().cleaned(),
+            lan: d.lan_share.clone(),
         };
         (list, opts)
     };

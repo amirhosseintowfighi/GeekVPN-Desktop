@@ -104,6 +104,8 @@ pub struct Persisted {
     pub tuning: geek_config::Tuning,
     /// «شبکه‌ها»: connect or disconnect on joining a network.
     pub networks: crate::networks::NetRules,
+    /// «اشتراک در شبکه‌ی محلی».
+    pub lan_share: geek_config::LanShare,
 }
 
 /// Results per (domain, network), overrides per (server, network), and
@@ -185,6 +187,7 @@ impl Default for Persisted {
             rules: Vec::new(),
             tuning: geek_config::Tuning::default(),
             networks: crate::networks::NetRules::default(),
+            lan_share: geek_config::LanShare::default(),
         }
     }
 }
