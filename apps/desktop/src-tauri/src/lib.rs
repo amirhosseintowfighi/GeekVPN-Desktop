@@ -13,6 +13,7 @@ mod shop;
 mod store;
 mod support;
 mod system;
+mod timer;
 mod tools;
 mod tunnel;
 mod update;
@@ -156,6 +157,8 @@ pub fn run() {
             desktop::setup(app, &settings, resume)?;
             deeplink::setup(app);
             networks::watch(app.handle().clone());
+            app.manage(timer::TimerState::default());
+            timer::watch(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -184,6 +187,8 @@ pub fn run() {
             backup::backup_save,
             backup::backup_restore,
             lan::lan_view,
+            timer::timer_get,
+            timer::timer_set,
             leak::leak_test,
             lock::lock_state,
             lock::lock_set_pin,
