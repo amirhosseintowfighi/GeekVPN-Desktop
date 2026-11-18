@@ -25,6 +25,7 @@ const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m
 const Advanced = lazy(() => import("./pages/Advanced").then((m) => ({ default: m.Advanced })));
 const Lan = lazy(() => import("./pages/Lan").then((m) => ({ default: m.Lan })));
 const AppLockPage = lazy(() => import("./pages/AppLock").then((m) => ({ default: m.AppLock })));
+const BackupPage = lazy(() => import("./pages/Backup").then((m) => ({ default: m.Backup })));
 const Networks = lazy(() => import("./pages/Networks").then((m) => ({ default: m.Networks })));
 const Split = lazy(() => import("./pages/Split").then((m) => ({ default: m.Split })));
 
@@ -80,6 +81,7 @@ const router = createHashRouter([
       { path: "settings/networks", element: susp(<Networks />) },
       { path: "settings/lan", element: susp(<Lan />) },
       { path: "settings/lock", element: susp(<AppLockPage />) },
+      { path: "settings/backup", element: susp(<BackupPage />) },
     ],
   },
 ]);

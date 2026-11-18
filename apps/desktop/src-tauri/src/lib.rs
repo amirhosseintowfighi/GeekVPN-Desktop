@@ -1,4 +1,5 @@
 mod auth;
+mod backup;
 mod deeplink;
 mod desktop;
 mod lan;
@@ -179,6 +180,8 @@ pub fn run() {
             system::connections_list,
             system::connections_close,
             system::programs_running,
+            backup::backup_save,
+            backup::backup_restore,
             lan::lan_view,
             lock::lock_state,
             lock::lock_set_pin,
