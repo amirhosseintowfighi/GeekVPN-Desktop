@@ -10,7 +10,7 @@ rust-version.workspace = true
 geek-api = { path = "../geek-api" }
 gethostname = "1"
 hex = "0.4"
-hmac = "0.12"
+hmac = "0.13"
 machine-uid = "0.6"
 serde_json = "1"
 sha2 = "0.10"
