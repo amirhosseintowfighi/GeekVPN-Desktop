@@ -142,7 +142,8 @@ pub fn seal(data: &BackupData, password: Option<&str>) -> Result<String, String>
     let file = match password.filter(|p| !p.is_empty()) {
         None => serde_json::json!({ "geekvpnBackup": FORMAT, "createdAt": created_at, "encrypted": false, "data": data }),
         Some(pw) => {
-            let salt: [u8; 16] = uuid::Uuid::new_v4().into_bytes();
+            let mut salt = [0u8; 16];
+            chacha20poly1305::aead::rand_core::RngCore::fill_bytes(&mut OsRng, &mut salt);
             let cipher = XChaCha20Poly1305::new(&key(pw, &salt)?.into());
             let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
             let plain = serde_json::to_vec(data).map_err(|e| e.to_string())?;

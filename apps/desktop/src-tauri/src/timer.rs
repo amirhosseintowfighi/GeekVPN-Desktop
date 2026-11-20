@@ -59,6 +59,16 @@ fn set(app: &AppHandle, deadline: Option<u64>) -> TimerView {
     v
 }
 
+/// The connection ended (any way): its deadline goes with it at once, so a
+/// quick reconnect does not inherit it.
+pub fn forget(app: &AppHandle) {
+    let Some(t) = app.try_state::<TimerState>() else { return };
+    let had = t.deadline.lock().unwrap_or_else(|e| e.into_inner()).take().is_some();
+    if had {
+        let _ = app.emit(CHANGED, TimerView { deadline_ms: None });
+    }
+}
+
 pub fn watch(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {

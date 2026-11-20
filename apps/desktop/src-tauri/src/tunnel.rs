@@ -531,7 +531,15 @@ impl Tunnel {
             loop {
                 let helper_event = async {
                     match helper_events.as_mut() {
-                        Some(rx) => rx.recv().await.ok(),
+                        // A lagged receiver missed events, it was not left:
+                        // only a closed channel means the helper is gone.
+                        Some(rx) => loop {
+                            match rx.recv().await {
+                                Ok(e) => break Some(e),
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break None,
+                            }
+                        },
                         None => std::future::pending().await,
                     }
                 };
@@ -550,6 +558,7 @@ impl Tunnel {
                                 format!("هسته‌ی اتصال بسته شد و اتصال قطع شد. تنظیمات شبکه به حالت قبل برگشت. {reason}")
                             };
                             self.usage.flush();
+                            self.live.lock().await.take();
                             self.fail(&app, message, kill_switch).await;
                             return;
                         }
@@ -565,21 +574,19 @@ impl Tunnel {
                             }
                             None => false,
                         };
-                        self.tun.lock().await.take();
-                        let _ = core.call("core.stop", json!({}), Duration::from_secs(5)).await;
-                        let blocking = kill_switch && tun_died;
-                        let text = match (tun_died, blocking) {
-                            (true, true) => "حالت TUN از کار افتاد. Kill Switch اینترنت را بسته نگه داشته تا دوباره وصل شوی یا «قطع» را بزنی.",
-                            (true, false) => "حالت TUN از کار افتاد و اتصال قطع شد.",
-                            _ => "سرویس GeekVPN بسته شد و اتصال قطع شد.",
-                        };
-                        self.usage.flush();
-                        self.fail(&app, text.into(), blocking).await;
+                        self.helper_gone(&app, &core, kill_switch, tun_died).await;
                         return;
                     }
                     _ = tick.tick() => {
                         if !matches!(*self.state.lock().await, TunnelState::On { .. }) {
                             self.usage.flush();
+                            return;
+                        }
+                        // The client keeps its own copy of the event sender,
+                        // so the helper going away never closes the channel:
+                        // its connection is what tells.
+                        if helper.as_ref().is_some_and(|h| !h.is_alive()) {
+                            self.helper_gone(&app, &core, kill_switch, false).await;
                             return;
                         }
                         let Ok(t) = core.call("core.traffic", json!({}), Duration::from_secs(3)).await else { continue };
@@ -601,6 +608,23 @@ impl Tunnel {
                 }
             }
         });
+    }
+
+    /// sing-box or the helper went away while connected: the core stops and
+    /// the customer is told. The kill switch holds only when sing-box died
+    /// (the helper, alive, keeps its firewall).
+    async fn helper_gone(&self, app: &AppHandle, core: &CoreProcess, kill_switch: bool, tun_died: bool) {
+        self.tun.lock().await.take();
+        self.live.lock().await.take();
+        let _ = core.call("core.stop", json!({}), Duration::from_secs(5)).await;
+        let blocking = kill_switch && tun_died;
+        let text = match (tun_died, blocking) {
+            (true, true) => "حالت TUN از کار افتاد. Kill Switch اینترنت را بسته نگه داشته تا دوباره وصل شوی یا «قطع» را بزنی.",
+            (true, false) => "حالت TUN از کار افتاد و اتصال قطع شد.",
+            _ => "سرویس GeekVPN بسته شد و اتصال قطع شد.",
+        };
+        self.usage.flush();
+        self.fail(app, text.into(), blocking).await;
     }
 
     /// Failover: the running connection moves to `server` in place, on the

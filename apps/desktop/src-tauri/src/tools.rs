@@ -230,6 +230,9 @@ pub async fn exit_ip(state: State<'_, ServersState>) -> Result<ExitIp, String> {
         TunnelState::On { .. } => None,
         _ => return Err("وصل نیستی.".into()),
     };
+    if proxy.is_none() && crate::leak::only_listed_apps(&state).await {
+        return Err("فقط برنامه‌های انتخاب‌شده از VPN می‌روند؛ IP خروجی از اینجا دیده نمی‌شود.".into());
+    }
     let mut builder = reqwest::Client::builder().connect_timeout(Duration::from_secs(8)).timeout(Duration::from_secs(12));
     builder = match proxy {
         Some(port) => builder.proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}")).map_err(|e| e.to_string())?),
