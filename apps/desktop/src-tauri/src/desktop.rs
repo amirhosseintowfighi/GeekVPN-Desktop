@@ -204,6 +204,9 @@ fn toggle_flyout(app: &AppHandle, icon: Rect) {
 /// Called on every tunnel state change: the tray follows, and the moments
 /// the user may not be watching become notifications.
 pub fn on_state(app: &AppHandle, before: &TunnelState, now: &TunnelState, totals: (i64, i64)) {
+    if matches!(now, TunnelState::Off | TunnelState::Failed { .. }) {
+        crate::timer::forget(app);
+    }
     if let Some(d) = app.try_state::<DesktopState>() {
         let (name, tip, label) = match now {
             TunnelState::On { server_name, .. } => ("on", format!("GeekVPN · متصل · {}", plain(server_name)), "قطع"),

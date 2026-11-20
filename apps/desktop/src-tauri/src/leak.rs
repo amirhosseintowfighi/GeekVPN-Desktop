@@ -181,9 +181,26 @@ pub async fn leak_test(state: State<'_, ServersState>) -> Result<LeakReport, Str
         }
     };
     let (vpn, real, ipv6, dns) = tokio::join!(vpn_f, real_f, v6_f, dns_f);
-    let checks = judge(tun, vpn.as_ref(), real.as_ref(), ipv6.as_ref(), dns.as_ref());
+    let mut checks = judge(tun, vpn.as_ref(), real.as_ref(), ipv6.as_ref(), dns.as_ref());
+    if tun && only_listed_apps(&state).await {
+        mark_only_apps(&mut checks);
+    }
     let resolvers = dns.and_then(Result::ok).unwrap_or_default();
     Ok(LeakReport { tun, vpn, real, ipv6, resolvers, checks })
+}
+
+/// TUN with «فقط برنامه‌های انتخاب‌شده» (sing-box; Windows' TUN has no
+/// per-app routing): GeekVPN itself is not one of them, so what it measures
+/// is the network without the VPN, not a leak.
+pub async fn only_listed_apps(state: &ServersState) -> bool {
+    !cfg!(windows) && state.store.lock().await.data.apps.mode == geek_config::AppMode::Only
+}
+
+fn mark_only_apps(checks: &mut [Check]) {
+    for c in checks.iter_mut().filter(|c| c.key != "ipv6") {
+        c.verdict = Verdict::Unknown;
+        c.note = "فقط برنامه‌هایی که در «تونل برنامه‌ای» انتخاب کرده‌ای از VPN می‌روند و خود GeekVPN جزوشان نیست؛ این تست از بیرون VPN انجام شد و معنی ندارد.".into();
+    }
 }
 
 #[cfg(test)]
@@ -217,5 +234,9 @@ mod tests {
 
         let proxy = judge(false, Some(&at("203.0.113.9", "DE")), Some(&at("203.0.113.9", "DE")), None, None);
         assert_eq!((v(&proxy, "ip"), v(&proxy, "dns")), (Verdict::Leak, Verdict::Unknown));
+
+        let mut only = leaky.clone();
+        mark_only_apps(&mut only);
+        assert_eq!((v(&only, "ip"), v(&only, "ipv6"), v(&only, "dns")), (Verdict::Unknown, Verdict::Leak, Verdict::Unknown));
     }
 }

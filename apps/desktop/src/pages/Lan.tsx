@@ -1,3 +1,4 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useEffect, useState } from "react";
 import { Button, Switch } from "../design-system/controls";
 import { Group, PageHeader, Row } from "../design-system/layout";
@@ -12,7 +13,7 @@ function Copy({ text, label }: { text: string; label: string }) {
       type="button"
       aria-label={`کپی ${label}`}
       onClick={() =>
-        void navigator.clipboard.writeText(text).then(() => {
+        void writeText(text).then(() => {
           setDone(true);
           setTimeout(() => setDone(false), 1500);
         })

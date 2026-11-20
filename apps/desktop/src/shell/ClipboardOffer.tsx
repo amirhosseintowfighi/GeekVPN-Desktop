@@ -26,6 +26,32 @@ export function setClipboardOffer(on: boolean) {
   }
 }
 
+const SEEN_KEY = "geek.clipboardSeen";
+
+/** A short fingerprint, so what was offered is remembered without keeping the link. */
+function fingerprint(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${text.length}:${(h >>> 0).toString(36)}`;
+}
+
+function seenBefore(text: string): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]") as string[]).includes(fingerprint(text));
+  } catch {
+    return false;
+  }
+}
+
+function remember(text: string) {
+  try {
+    const list = (JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]") as string[]).filter((x) => x !== fingerprint(text));
+    localStorage.setItem(SEEN_KEY, JSON.stringify([fingerprint(text), ...list].slice(0, 50)));
+  } catch {
+    // Without storage it is offered again next time, nothing worse.
+  }
+}
+
 /**
  * A config or subscription link copied elsewhere (Telegram, a browser) is
  * offered when the window comes to the front, once per link; nothing is
@@ -47,8 +73,10 @@ export function ClipboardOffer() {
       readText().then(
         (text) => {
           const l = linkIn(text ?? "");
-          if (!l || seen.current.has(l) || alreadyAdded(l, viewRef.current)) return;
+          // Offered once, ever: added or dismissed, it does not come back.
+          if (!l || seen.current.has(l) || seenBefore(l) || alreadyAdded(l, viewRef.current)) return;
           seen.current.add(l);
+          remember(l);
           setLink(l);
         },
         () => {},
